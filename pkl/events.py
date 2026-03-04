@@ -80,17 +80,24 @@ class EventSubscription(Resource):
     """A resource representing a subscription to an event.
     
     When the subscribing plugin is disabled, the subscription is automatically removed.
+    For host subscriptions (plugin=None), the subscription lasts forever.
     """
 
-    def __init__(self, plugin: "Plugin", event: "Event", handler: EventHandler) -> None:
+    def __init__(self, plugin: Optional["Plugin"], event: "Event", handler: EventHandler) -> None:
         """Initialize the event subscription.
         
         Args:
-            plugin: The plugin that subscribed to the event.
+            plugin: The plugin that subscribed (None for host subscriptions).
             event: The event being subscribed to.
             handler: The handler function.
         """
-        super().__init__(plugin)
+        # Only call super().__init__ if plugin is not None
+        if plugin is not None:
+            super().__init__(plugin)
+        else:
+            # Host subscription - no resource tracking needed
+            self.plugin = None
+            self._enabled = True
         self.event = event
         self.handler = handler
 
@@ -118,7 +125,7 @@ class HostEvent(EventBase):
         Args:
             host: The plugin host that owns this event.
             name: The event name.
-            protected: If True, only the host (outside plugin context) can invoke this event.
+            protected: If True, only the host (outside plugin context) can subscribe to this event.
             generator: The generator function for custom event behavior (optional).
         """
         self.host = host
@@ -134,16 +141,24 @@ class HostEvent(EventBase):
             handler: The handler function to call when the event is triggered.
 
         Raises:
-            RuntimeError: If called outside of plugin context.
+            RuntimeError: If the event is protected and called from plugin context.
         """
         current = self.host.get_current_plugin()
-        if current is None:
-            raise RuntimeError("Cannot subscribe to host events outside of plugin context")
-
-        # Create a subscription resource that will auto-cleanup when the plugin is disabled
+        
+        if self.protected:
+            # Protected host events: only host (plugin=None) can subscribe
+            if current is not None:
+                raise RuntimeError(
+                    f"Host event {self.name} is protected and can only be subscribed to by the host"
+                )
+        
+        # Create subscription - tracks plugin if subscribed from plugin context
         subscription = EventSubscription(current, self, handler)  # type: ignore
         self._subscriptions.append(subscription)
-        current.host.resource_manager.register(subscription)
+        
+        # Register as resource only if subscribed from plugin context (for auto-cleanup)
+        if current is not None:
+            current.host.resource_manager.register(subscription)
 
     def unsubscribe(self, handler: EventHandler) -> None:
         """Unsubscribe from this host event.
@@ -152,8 +167,6 @@ class HostEvent(EventBase):
             handler: The handler to remove.
         """
         current = self.host.get_current_plugin()
-        if current is None:
-            return
 
         # Find and disable the subscription
         for subscription in self._subscriptions[:]:
@@ -172,22 +185,13 @@ class HostEvent(EventBase):
 
     def __call__(self, *args: Any, **kwargs: Any) -> None:
         """Invoke the host event.
+        
+        Only the host (code that defined the event) can invoke it.
 
         Args:
             *args: Positional arguments to pass to handlers.
             **kwargs: Keyword arguments to pass to handlers.
-
-        Raises:
-            RuntimeError: If the event is protected and invoked from within a plugin.
         """
-        # If protected, only allow invocation from outside plugin context (host code)
-        if self.protected:
-            current = self.host.get_current_plugin()
-            if current is not None:
-                raise RuntimeError(
-                    f"Host event {self.name} is protected and can only be invoked by the host"
-                )
-
         if self.generator is not None:
             # Use the generator pattern
             gen = self.generator(*args, **kwargs)
@@ -254,18 +258,21 @@ class Event(EventBase, Resource):
             RuntimeError: If the event is protected and called from wrong plugin.
         """
         current = self.plugin.host.get_current_plugin()
-        if current is None:
-            raise RuntimeError("Cannot subscribe to event outside of plugin context")
-
-        if self.protected and current != self.plugin:
-            raise RuntimeError(
-                f"Event {self.name} is protected and can only be subscribed to by {self.plugin.name}"
-            )
+        
+        if self.protected:
+            # Protected plugin events: only owning plugin can subscribe
+            if current != self.plugin:
+                raise RuntimeError(
+                    f"Event {self.name} is protected and can only be subscribed to by {self.plugin.name}"
+                )
 
         # Create a subscription resource that will auto-cleanup when the plugin is disabled
         subscription = EventSubscription(current, self, handler)
         self._subscriptions.append(subscription)
-        current.host.resource_manager.register(subscription)
+        
+        # Register as resource only if subscribed from plugin context (for auto-cleanup)
+        if current is not None:
+            current.host.resource_manager.register(subscription)
 
     def unsubscribe(self, handler: EventHandler) -> None:
         """Unsubscribe from this event.
@@ -354,7 +361,7 @@ def event(protected: bool = False) -> Callable[[Callable], Event]:
 
     Args:
         protected: If True, only the defining plugin can subscribe to this event (plugin events)
-                   or only the host can invoke it (host events).
+                   or only the host can subscribe to it (host events).
 
     Returns:
         A decorator that creates an Event or HostEvent.
@@ -373,7 +380,7 @@ def event(protected: bool = False) -> Callable[[Callable], Event]:
             print(f"[SYSTEM] {message}")
             yield
         
-        # Protected host event (only host can invoke):
+        # Protected host event (only host can subscribe):
         @event(protected=True)
         def admin_event(data: str):
             pass
