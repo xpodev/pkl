@@ -24,11 +24,7 @@ def main():
     print("=" * 60)
     print()
 
-    # Create a plugin host
-    host = pkl.PluginHost()
-    pkl.set_default_host(host)
-
-    # Import host-level events (must be after host is created)
+    # Import host-level events
     from host_events import system_message
 
     # Add some hooks for demonstration
@@ -38,8 +34,8 @@ def main():
     def on_disable(plugin):
         print(f"🔴 Plugin disabled: {plugin.name}")
 
-    host.add_enable_hook(on_enable)
-    host.add_disable_hook(on_disable)
+    pkl.host.add_enable_hook(on_enable)
+    pkl.host.add_disable_hook(on_disable)
 
     # Get plugin paths
     examples_dir = Path(__file__).parent

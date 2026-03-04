@@ -76,12 +76,11 @@ class PluginLogger(Resource):
             self._adapter.exception(msg, *args, **kwargs)  # type: ignore
 
 
-def get_logger(name: Optional[str] = None, host: Optional["PluginHost"] = None) -> PluginLogger:
+def get_logger(name: Optional[str] = None) -> PluginLogger:
     """Get a logger for the current plugin.
 
     Args:
         name: Optional logger name (defaults to plugin name).
-        host: The plugin host to use (defaults to the default host).
 
     Returns:
         A logger instance.
@@ -89,9 +88,7 @@ def get_logger(name: Optional[str] = None, host: Optional["PluginHost"] = None) 
     Raises:
         RuntimeError: If called outside a plugin context.
     """
-    if host is None:
-        from . import get_default_host
-        host = get_default_host()
+    from . import host
     
     plugin = host.get_current_plugin()
     if plugin is None:
@@ -109,23 +106,14 @@ class LogProxy:
     for the current plugin and caches it.
     """
 
-    def __init__(self, host: Optional["PluginHost"] = None) -> None:
-        """Initialize the log proxy.
-        
-        Args:
-            host: The plugin host to use (defaults to the default host).
-        """
-        self._host = host
+    def __init__(self) -> None:
+        """Initialize the log proxy."""
         # Cache loggers per plugin
         self._loggers: dict = {}
 
     def _get_logger(self) -> PluginLogger:
         """Get or create a logger for the current plugin."""
-        if self._host is None:
-            from . import get_default_host
-            host = get_default_host()
-        else:
-            host = self._host
+        from . import host
         
         plugin = host.get_current_plugin()
         if plugin is None:
@@ -136,7 +124,7 @@ class LogProxy:
             return self._loggers[plugin]
         
         # Create new logger (will be registered as a resource)
-        logger = get_logger(host=self._host)
+        logger = get_logger()
         self._loggers[plugin] = logger
         return logger
 

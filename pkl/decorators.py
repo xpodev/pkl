@@ -33,10 +33,9 @@ def syscall(func: F) -> F:
         The decorated function.
     """
     # Import here to avoid circular dependency
-    from . import get_default_host
+    from . import host
     
     # Capture the plugin that defined the decorated function
-    host = get_default_host()
     defining_plugin = host.get_current_plugin()
 
     if inspect.iscoroutinefunction(func):

@@ -1,9 +1,9 @@
 """Tests for pkl resource management."""
 
 import pytest
+import pkl
 from pkl.resource import Resource, ResourceManager
 from pkl.plugin import Plugin
-from pkl.host import PluginHost
 
 
 class DummyResource(Resource):
@@ -19,8 +19,7 @@ class DummyResource(Resource):
 
 def test_resource_creation():
     """Test resource creation."""
-    host = PluginHost()
-    plugin = Plugin(host, "test", None, None)
+    plugin = Plugin(pkl.host, "test", None, None)
     resource = DummyResource(plugin)
     
     assert resource.plugin == plugin
@@ -30,8 +29,7 @@ def test_resource_creation():
 
 def test_resource_cleanup():
     """Test resource cleanup."""
-    host = PluginHost()
-    plugin = Plugin(host, "test", None, None)
+    plugin = Plugin(pkl.host, "test", None, None)
     resource = DummyResource(plugin)
     
     resource.disable()
@@ -43,8 +41,7 @@ def test_resource_cleanup():
 def test_resource_manager_register():
     """Test resource registration."""
     manager = ResourceManager()
-    host = PluginHost()
-    plugin = Plugin(host, "test", None, None)
+    plugin = Plugin(pkl.host, "test", None, None)
     resource = DummyResource(plugin)
     
     manager.register(resource)
@@ -56,8 +53,7 @@ def test_resource_manager_register():
 def test_resource_manager_cleanup_plugin():
     """Test cleanup of all plugin resources."""
     manager = ResourceManager()
-    host = PluginHost()
-    plugin = Plugin(host, "test", None, None)
+    plugin = Plugin(pkl.host, "test", None, None)
     
     # Create and register multiple resources
     resources = [DummyResource(plugin) for _ in range(3)]
@@ -79,8 +75,7 @@ def test_resource_manager_cleanup_plugin():
 def test_resource_manager_hooks():
     """Test resource manager hooks."""
     manager = ResourceManager()
-    host = PluginHost()
-    plugin = Plugin(host, "test", None, None)
+    plugin = Plugin(pkl.host, "test", None, None)
     
     registered = []
     cleaned = []

@@ -88,9 +88,8 @@ def set_timeout(callback: Callable[[], Any], delay: float = 0) -> Timer:
     Raises:
         RuntimeError: If called outside a plugin context.
     """
-    from . import get_default_host
+    from . import host
     
-    host = get_default_host()
     plugin = host.get_current_plugin()
     if plugin is None:
         raise RuntimeError("set_timeout() must be called from within a plugin context")
@@ -100,13 +99,12 @@ def set_timeout(callback: Callable[[], Any], delay: float = 0) -> Timer:
     return timer
 
 
-def set_interval(callback: Callable[[], Any], delay: float, host: Optional["PluginHost"] = None) -> Timer:
+def set_interval(callback: Callable[[], Any], delay: float) -> Timer:
     """Schedule a function to be called repeatedly.
 
     Args:
         callback: The function to call.
         delay: The delay in seconds between calls.
-        host: The plugin host to use (defaults to the default host).
 
     Returns:
         A Timer that can be cancelled.
@@ -114,9 +112,7 @@ def set_interval(callback: Callable[[], Any], delay: float, host: Optional["Plug
     Raises:
         RuntimeError: If called outside a plugin context.
     """
-    if host is None:
-        from . import get_default_host
-        host = get_default_host()
+    from . import host
     
     plugin = host.get_current_plugin()
     if plugin is None:

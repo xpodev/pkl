@@ -381,9 +381,9 @@ def event(protected: bool = False) -> Callable[[Callable], Event]:
 
     def decorator(func: Callable) -> Event:
         # Import here to avoid circular dependency
-        from . import get_default_host
+        from . import host
         
-        host_obj = get_default_host()
+        host_obj = host
 
         # Check if function is a generator
         import inspect

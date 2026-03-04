@@ -39,7 +39,7 @@ class ChildPluginResource(Resource):
             self.child.disable()
 
 
-def load_plugin(source: Union[str, Path], detached: bool = False, host: Optional["PluginHost"] = None) -> "Plugin":
+def load_plugin(source: Union[str, Path], detached: bool = False) -> "Plugin":
     """Load a plugin from the current context.
 
     If called from within a plugin context, the loaded plugin becomes a child
@@ -50,14 +50,11 @@ def load_plugin(source: Union[str, Path], detached: bool = False, host: Optional
         source: The plugin source (path or name).
         detached: If True and loading as a child, the child plugin becomes 
                   independent of its parent.
-        host: The plugin host to use (defaults to the default host).
 
     Returns:
         The loaded plugin.
     """
-    if host is None:
-        from . import get_default_host
-        host = get_default_host()
+    from . import host
 
     parent = host.get_current_plugin()
 
