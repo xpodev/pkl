@@ -2,14 +2,16 @@
 
 Complete API documentation for PKL.
 
-## Core Modules
+## Core Components
 
-- [PluginHost](host.md) - Main plugin management system
-- [Plugin](plugin.md) - Plugin representation and control
-- [Events](events.md) - Event system (Event, HostEvent, @event)
-- [Resources](resources.md) - Resource management
-- [Context](context.md) - Plugin context tracking
-- [Utilities](utilities.md) - Helper functions and decorators
+PKL provides a comprehensive plugin system with the following components:
+
+- **PluginHost** - Main plugin management system
+- **Plugin** - Plugin representation and control
+- **Events** - Event system (Event, HostEvent, EventBase, @event decorator)
+- **Resources** - Resource management with automatic cleanup
+- **Context** - Plugin context tracking and awareness
+- **Utilities** - Helper functions and decorators
 
 ## Quick Links
 

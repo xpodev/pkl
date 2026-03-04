@@ -115,4 +115,4 @@ plugin.disable()
 
 - [Events](events.md)
 - [Lifecycle](lifecycle.md)
-- [API Reference](../api/resources.md)
+- [API Reference](../api/index.md)

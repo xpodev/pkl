@@ -149,4 +149,4 @@ timer2 = set_timeout(func2, 2.0)  # Registered second
 
 - [Resources](resources.md)
 - [Events](events.md)
-- [API Reference](../api/plugin.md)
+- [API Reference](../api/index.md)

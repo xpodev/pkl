@@ -73,24 +73,5 @@ nav:
     - Context & API: guide/context-api.md
     - Lifecycle: guide/lifecycle.md
     - Logging: guide/logging.md
-  - API Reference:
-    - PluginHost: api/host.md
-    - Plugin: api/plugin.md
-    - Events: api/events.md
-    - Resources: api/resources.md
-    - Context: api/context.md
-    - Utilities: api/utilities.md
-  - Advanced:
-    - Custom Loaders: advanced/custom-loaders.md
-    - Hooks: advanced/hooks.md
-    - Async Support: advanced/async.md
-    - Multi-Host: advanced/multi-host.md
-  - Examples:
-    - Overview: examples/overview.md
-    - Basic Plugin: examples/basic.md
-    - Events & API: examples/events-api.md
-    - Host Events: examples/host-events.md
-  - Development:
-    - Contributing: development/contributing.md
-    - Architecture: development/architecture.md
-    - Testing: development/testing.md
+  - API Reference: api/index.md
+  - Examples: examples/overview.md

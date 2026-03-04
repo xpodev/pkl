@@ -269,4 +269,4 @@ async def async_api():
 - [Creating Plugins](../guide/creating-plugins.md) - Build your first plugin
 - [Events](../guide/events.md) - Master the event system
 - [Resources](../guide/resources.md) - Create custom resources
-- [API Reference](../api/host.md) - Detailed API docs
+- [API Reference](../api/index.md) - Detailed API docs

@@ -18,42 +18,30 @@ python examples/example.py
 
 ### Basic Plugin Example
 
-Simple plugin demonstrating fundamentals:
+Simple plugin demonstrating fundamentals (see `examples/plugins/a/`):
 
 - Plugin structure and metadata
 - Logging
 - Initialization code
 - Basic lifecycle
 
-**Location**: `examples/plugins/a/`
-
-[View detailed walkthrough →](basic.md)
-
 ### Events & API Example
 
-Advanced plugin showing event system and API:
+Advanced plugin showing event system and API (see `examples/plugins/a/` and `examples/plugins/b/`):
 
 - Creating events with `@event()`
 - Providing API functions with `@syscall`
 - Event handlers with before/after hooks
 - Cross-plugin communication
 
-**Location**: `examples/plugins/a/` and `examples/plugins/b/`
-
-[View detailed walkthrough →](events-api.md)
-
 ### Host Events Example
 
-System-wide events for multi-plugin coordination:
+System-wide events for multi-plugin coordination (see `examples/host_events.py`):
 
 - Defining host events
 - Protected vs public host events
 - Multiple plugins subscribing
 - Automatic subscription cleanup
-
-**Location**: `examples/host_events.py`
-
-[View detailed walkthrough →](host-events.md)
 
 ## Example Structure
 
@@ -142,9 +130,9 @@ Example complete!
 
 ## Learning Path
 
-1. **Start here**: [Basic Plugin](basic.md) - Learn the fundamentals
-2. **Then**: [Events & API](events-api.md) - Master inter-plugin communication
-3. **Finally**: [Host Events](host-events.md) - System-wide coordination
+1. **Start here**: Review the code in `examples/plugins/a/` - Learn the fundamentals
+2. **Then**: Study `examples/plugins/b/` - Master inter-plugin communication
+3. **Finally**: Examine `examples/host_events.py` - System-wide coordination
 
 ## Modifying Examples
 
@@ -172,6 +160,6 @@ some_event += my_handler
 
 ## Next Steps
 
-- [Basic Plugin Example](basic.md) - Start learning
+- Check out the example code in `examples/` directory
 - [User Guide](../guide/creating-plugins.md) - Detailed guides
-- [API Reference](../api/host.md) - Complete API documentation
+- [API Reference](../api/index.md) - Complete API documentation

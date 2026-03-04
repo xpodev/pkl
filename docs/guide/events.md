@@ -373,5 +373,5 @@ def track_login(username: str, session_id: str):
 
 - [Context & API](context-api.md) - Learn about `@syscall` and context
 - [Resources](resources.md) - Understand resource management
-- [Examples](../examples/events-api.md) - See complete examples
-- [API Reference](../api/events.md) - Detailed event API
+- [Examples](../examples/overview.md) - See complete examples
+- [API Reference](../api/index.md) - Detailed event API

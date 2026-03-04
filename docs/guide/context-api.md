@@ -414,4 +414,4 @@ print(f"Connected to: {info['database']}")
 - [Resources](resources.md) - Manage plugin resources
 - [Lifecycle](lifecycle.md) - Plugin lifecycle management
 - [Events](events.md) - Event system deep dive
-- [Examples](../examples/events-api.md) - Complete examples
+- [Examples](../examples/overview.md) - Complete examples
