@@ -156,11 +156,11 @@ Typical plugin structure:
 my_plugin/
   ├── plugin.json          # Metadata
   ├── plugin.py            # Entrypoint (initialization)
-  ├── __init__.py          # Public API
+  ├── __init__.py        # Public API
   └── internal.py          # Internal modules
 ```
 
-### __init__.py Pattern
+### \_\_init\_\_.py Pattern
 
 Export your public API from `__init__.py`:
 

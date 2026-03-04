@@ -1,4 +1,4 @@
-# Creating Plugins
+# Creating Plugins ???
 
 Learn how to create well-structured plugins for PKL.
 
@@ -18,7 +18,7 @@ A complete plugin:
 my_plugin/
 ├── plugin.json      # Metadata
 ├── plugin.py        # Entrypoint
-├── __init__.py      # Public API
+├── __init__.py    # Public API
 ├── internal.py      # Internal modules
 └── subplugins/      # Child plugins (optional)
 ```
@@ -66,7 +66,7 @@ def cleanup():
     log.info("Cleaning up!")
 ```
 
-### Public API (__init__.py)
+### Public API (\_\_init\_\_.py)
 
 Export your public API:
 

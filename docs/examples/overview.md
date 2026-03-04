@@ -53,7 +53,7 @@ examples/
     ├── a/                  # Plugin A
     │   ├── plugin.json     # Metadata
     │   ├── plugin.py       # Entrypoint
-    │   └── __init__.py     # Public API
+    │   └── __init__.py   # Public API
     └── b/                  # Plugin B
         ├── plugin.json
         ├── plugin.py
