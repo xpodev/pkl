@@ -191,7 +191,17 @@ class HostEvent(EventBase):
         Args:
             *args: Positional arguments to pass to handlers.
             **kwargs: Keyword arguments to pass to handlers.
+            
+        Raises:
+            RuntimeError: If invoked from within a plugin context.
         """
+        # Only the host can invoke host events (regardless of protected flag)
+        current = self.host.get_current_plugin()
+        if current is not None:
+            raise RuntimeError(
+                f"Host event {self.name} can only be invoked by the host, not by plugin {current.name}"
+            )
+        
         if self.generator is not None:
             # Use the generator pattern
             gen = self.generator(*args, **kwargs)
