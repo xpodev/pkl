@@ -475,17 +475,6 @@ Contributions welcome! Please:
 4. Ensure mypy and tests pass
 5. Submit a pull request
 
-## Roadmap
-
-- [ ] Plugin discovery by name (registry)
-- [ ] Version constraint checking
-- [ ] Resource quotas and limits
-- [ ] Plugin sandboxing for security
-- [ ] Hot reloading support
-- [ ] Plugin dependency graph visualization
-- [ ] Performance profiling hooks
-- [ ] Web UI for plugin management
-
 ## Credits
 
 Created by xpodev
