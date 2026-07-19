@@ -24,6 +24,8 @@ __version__ = "0.1.0"
 __all__ = [
     # Core
     "host",
+    "get_default_host",
+    "set_default_host",
     "Plugin",
     "PluginState",
     "LifecycleEvent",
@@ -65,6 +67,36 @@ __all__ = [
 # Global plugin host - automatically created on import
 host = PluginHost(name="default")
 install_plugin_importer(host)
+
+
+def get_default_host() -> PluginHost:
+    """Get the default (process-global) plugin host.
+
+    Returns:
+        The current default `PluginHost` instance.
+    """
+    return host
+
+
+def set_default_host(new_host: PluginHost) -> None:
+    """Replace the default plugin host used by module-level convenience functions.
+
+    Every module-level function in `pkl` (`load_plugin`, `get_current_plugin`,
+    `set_timeout`, `set_interval`, the `pkl.plugins` virtual-import machinery, etc.)
+    operates on the default host. Call this to point them at a different
+    `PluginHost` instance, e.g. to give each `PluginHost` owner (or each test) an
+    independent host instead of sharing the single process-global one.
+
+    Note: `@syscall` captures the default host at decoration time, so a function
+    decorated before this call keeps running against the *old* host. Swap hosts
+    once at startup, before any `@syscall`-decorated function is defined.
+
+    Args:
+        new_host: The `PluginHost` instance to install as the default.
+    """
+    global host
+    host = new_host
+    install_plugin_importer(host)
 
 
 def get_current_plugin() -> Optional[Plugin]:

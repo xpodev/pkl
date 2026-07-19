@@ -57,30 +57,62 @@ class ImportlibPluginLoader:
         if not module_path.exists():
             raise ImportError(f"Plugin entrypoint not found: {module_path}")
 
-        # Create a unique module name
-        module_name = f"pkl.plugins.{plugin.name}"
+        package_name = f"pkl.plugins.{plugin.name}"
 
-        # Load the module
-        spec = importlib.util.spec_from_file_location(module_name, module_path)
+        # Purge any stale sys.modules entries left behind by a previous load of
+        # a same-named plugin (possibly against a different host), so this load
+        # always starts from a clean slate instead of picking up cached submodules.
+        for key in [
+            k for k in sys.modules if k == package_name or k.startswith(package_name + ".")
+        ]:
+            del sys.modules[key]
+
+        init_path = plugin.path / "__init__.py"
+        if init_path.exists():
+            # Load __init__.py as the real package module, with a __path__
+            # pointing at the plugin's own directory, so relative imports
+            # (both inside __init__.py and inside the entrypoint) resolve
+            # against the plugin's own files like an ordinary Python package.
+            init_spec = importlib.util.spec_from_file_location(
+                package_name, init_path, submodule_search_locations=[str(plugin.path)]
+            )
+            if init_spec is None or init_spec.loader is None:
+                raise ImportError(f"Cannot create module spec for {init_path}")
+
+            init_module = importlib.util.module_from_spec(init_spec)
+            sys.modules[package_name] = init_module
+            init_spec.loader.exec_module(init_module)
+
+            # __init__.py's own relative imports (e.g. `from .plugin import X`)
+            # may already have triggered normal import machinery to load and
+            # register the entrypoint as a submodule. Reuse that module instead
+            # of loading and executing the entrypoint a second time under a
+            # second, distinct module object.
+            entrypoint_name = f"{package_name}.{entrypoint}"
+            module = sys.modules.get(entrypoint_name)
+            if module is None:
+                spec = importlib.util.spec_from_file_location(entrypoint_name, module_path)
+                if spec is None or spec.loader is None:
+                    raise ImportError(f"Cannot create module spec for {module_path}")
+
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[entrypoint_name] = module
+                spec.loader.exec_module(module)
+
+            # Make the entrypoint accessible as an attribute of the package,
+            # matching normal Python submodule-import behavior.
+            setattr(init_module, entrypoint, module)
+
+            return module
+
+        # No __init__.py: load the entrypoint as a plain module, unchanged
+        # from prior behavior.
+        spec = importlib.util.spec_from_file_location(package_name, module_path)
         if spec is None or spec.loader is None:
             raise ImportError(f"Cannot create module spec for {module_path}")
 
         module = importlib.util.module_from_spec(spec)
-        sys.modules[module_name] = module
-
-        # Also check for __init__.py and load that too
-        init_path = plugin.path / "__init__.py"
-        if init_path.exists():
-            init_module_name = f"pkl.plugins.{plugin.name}.__init__"
-            init_spec = importlib.util.spec_from_file_location(init_module_name, init_path)
-            if init_spec is not None and init_spec.loader is not None:
-                init_module = importlib.util.module_from_spec(init_spec)
-                sys.modules[init_module_name] = init_module
-                # Make the package accessible
-                sys.modules[f"pkl.plugins.{plugin.name}"] = init_module
-                init_spec.loader.exec_module(init_module)
-
-        # Execute the entrypoint module
+        sys.modules[package_name] = module
         spec.loader.exec_module(module)
 
         return module
