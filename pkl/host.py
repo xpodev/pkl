@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextvars import ContextVar
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union, overload
 
 from .context import plugin_context
 from .loader import ImportlibPluginLoader, PluginLoader
@@ -23,11 +23,29 @@ _host_counter = 0
 class PluginHost:
     """The main plugin host system."""
 
+    @overload
+    def __init__(
+        self,
+        name: Optional[str] = None,
+        metadata_loader: Optional[MetadataLoader] = None,
+        plugin_loader: None = None,
+        namespace: str = "pkl.plugins",
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        name: Optional[str] = None,
+        metadata_loader: Optional[MetadataLoader] = None,
+        plugin_loader: PluginLoader = ...,
+    ) -> None: ...
+
     def __init__(
         self,
         name: Optional[str] = None,
         metadata_loader: Optional[MetadataLoader] = None,
         plugin_loader: Optional[PluginLoader] = None,
+        namespace: str = "pkl.plugins",
     ) -> None:
         """Initialize the plugin host.
 
@@ -35,14 +53,18 @@ class PluginHost:
             name: The host name (auto-generated if not provided).
             metadata_loader: The metadata loader to use.
             plugin_loader: The plugin loader to use.
+            namespace: The namespace for plugins (used if plugin_loader is not provided).
         """
         global _host_counter
         if name is None:
             name = f"PluginHost<{id(self)}>"
         self.name = name
+
+        if plugin_loader is not None and namespace != "pkl.plugins":
+            raise ValueError("Cannot specify namespace when plugin_loader is provided")
         
         self.metadata_loader: MetadataLoader = metadata_loader or ManifestMetadataLoader()
-        self.plugin_loader: PluginLoader = plugin_loader or ImportlibPluginLoader()
+        self.plugin_loader: PluginLoader = plugin_loader or ImportlibPluginLoader(namespace=namespace)
         self.resource_manager = ResourceManager()
 
         # Per-host context variable

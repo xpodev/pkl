@@ -16,6 +16,11 @@ __all__ = ["PluginLoader", "ImportlibPluginLoader"]
 class PluginLoader(Protocol):
     """Protocol for plugin loaders."""
 
+    @property
+    def namespace(self) -> str:
+        """The namespace under which plugins are loaded."""
+        ...
+
     def load(self, plugin: "Plugin") -> Any:
         """Load a plugin and return its module.
 
@@ -33,6 +38,14 @@ class PluginLoader(Protocol):
 
 class ImportlibPluginLoader:
     """Default plugin loader using importlib."""
+
+    def __init__(self, namespace: str = "pkl.plugins") -> None:
+        """Initialize the plugin loader.
+
+        Args:
+            namespace: The namespace under which plugins are loaded.
+        """
+        self.namespace = namespace
 
     def load(self, plugin: "Plugin") -> Any:
         """Load a plugin using importlib.
@@ -57,7 +70,7 @@ class ImportlibPluginLoader:
         if not module_path.exists():
             raise ImportError(f"Plugin entrypoint not found: {module_path}")
 
-        package_name = f"pkl.plugins.{plugin.name}"
+        package_name = f"{self.namespace}.{plugin.name}"
 
         # Purge any stale sys.modules entries left behind by a previous load of
         # a same-named plugin (possibly against a different host), so this load

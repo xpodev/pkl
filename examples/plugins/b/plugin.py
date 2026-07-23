@@ -3,7 +3,7 @@
 from pkl import set_interval, get_current_plugin, log
 
 # Import plugin A using the custom importer
-from pkl.plugins import a
+from pkl.plugins import a  # type: ignore
 
 # Call the context-preserving API
 print("Plugin B calling a.my_api():")
@@ -38,7 +38,10 @@ logger = log
 logger.info("Plugin B is initializing...")
 
 # Register a cleanup handler using lifecycle event with .on decorator
-@get_current_plugin().on_disable.on
+plugin = get_current_plugin()
+assert plugin is not None, "Must be called from plugin context"
+
+@plugin.on_disable.on
 def cleanup():
     """Called when plugin is being disabled."""
     logger.info("Plugin B cleanup handler called!")

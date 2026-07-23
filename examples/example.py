@@ -62,7 +62,7 @@ def main():
     # Trigger plugin A's event
     print("Triggering plugin A's event...")
     # Import plugin A to access its API
-    from pkl.plugins import a
+    from pkl.plugins import a  # type: ignore
     user = a.User("Alice")
     a.trigger_my_event(user)
     print()

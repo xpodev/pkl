@@ -10,7 +10,7 @@ pkl = ["py.typed", "*.pyi"]
 
 [project]
 name = "plugins-kernel"
-version = "0.1.0"
+version = "0.1.1"
 description = "A Python plugin hosting system with comprehensive resource management, inspired by operating system concepts"
 readme = "README.md"
 requires-python = ">=3.9"

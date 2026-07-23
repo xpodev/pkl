@@ -37,7 +37,9 @@ def trigger_my_event(user: User):
 @syscall
 def my_api():
     """API that preserves plugin context."""
-    print(f"my_api called, current plugin: {get_current_plugin().name}")  # type: ignore
+    current = get_current_plugin()
+    assert current is not None  # Should always have context in @syscall
+    print(f"my_api called, current plugin: {current.name}")
     # should always be 'a' since this is a context preserved API
 
 def my_other_api():
