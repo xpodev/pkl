@@ -1,272 +1,66 @@
-# Core Concepts
+# Core concepts
 
-Understanding PKL's architecture and design principles.
+pkl tracks resources. To do that it needs to know *who is creating each resource* and *what each plugin owns*.
+Four concepts, each in its own module, and nothing else in the core.
 
-## The OS Analogy
+## Plugin
 
-PKL treats plugins like **processes** in an operating system:
-
-- Each plugin runs in its own "context"
-- Resources are tracked like file descriptors
-- Context switches happen automatically
-- Cleanup is guaranteed (like process exit)
-
-## Architecture Overview
-
-```
-┌─────────────────────────────────────────┐
-│           PluginHost                     │
-│  ┌────────────────────────────────────┐ │
-│  │     ResourceManager                │ │
-│  │  - Tracks all resources            │ │
-│  │  - Cleanup on disable              │ │
-│  └────────────────────────────────────┘ │
-│                                          │
-│  ┌──────────┐  ┌──────────┐            │
-│  │ Plugin A │  │ Plugin B │  ...       │
-│  │          │  │          │            │
-│  │ Resources│  │ Resources│            │
-│  │ - Events │  │ - Timers │            │
-│  │ - Loggers│  │ - Custom │            │
-│  └──────────┘  └──────────┘            │
-└─────────────────────────────────────────┘
-```
-
-## Key Components
-
-### PluginHost
-
-The central coordinator that manages:
-
-- Plugin loading and lifecycle
-- Context tracking (which plugin is currently executing)
-- System-wide hooks
-- Host-level events
+The identity of a plugin. Two plugins are the same if and only if they are the same object (`is`).
+A `Plugin` has no name, path, metadata or state. Derive from it, compose it or wrap it to attach what your
+application knows:
 
 ```python
-host = pkl.PluginHost(name="my_app")
+from dataclasses import dataclass, field
+from pkl import Plugin
+
+@dataclass(eq=False)               # eq=False keeps identity semantics
+class AppPlugin(Plugin):
+    id: str
+    name: str
+    metadata: dict[str, str] = field(default_factory=dict)
 ```
 
-### Plugin
+pkl only ever reads the identity. (Registries key plugins by `id()`, so even a value-equal dataclass is safe.)
 
-Represents a loaded plugin with:
+## PluginTracker
 
-- **State**: UNLOADED → LOADED → ENABLED → DISABLED
-- **Resources**: Everything the plugin creates
-- **Module**: The loaded Python module
-- **Metadata**: Name, version, dependencies, etc.
+Knows which plugin is currently executing.
 
 ```python
-plugin = host.load_plugin(path)  # State: LOADED
-plugin.enable()                   # State: ENABLED
-plugin.disable()                  # State: DISABLED, resources cleaned up
+plugins = PluginTracker[AppPlugin]()
+plugins.current                    # AppPlugin | None
+with plugins.executing(alpha):     # nests, restores on exit and on error
+    plugins.current                # alpha
+    plugins.require_current()      # alpha, or NoCurrentPluginError
+with plugins.executing(None):      # run as the host
+    ...
 ```
 
-### Resources
+The current plugin is stored in a `ContextVar`: it is per thread and per `asyncio` task. Trackers are independent;
+there is no default tracker.
 
-Objects that need cleanup. Built-in resources:
+## Resource
 
-- **EventSubscription** - Event handlers
-- **Timer** - Scheduled callbacks (set_timeout, set_interval)
-- **Logger** - Per-plugin loggers
+A thing that can be released: any object with `release() -> None` (a `Protocol`). `release()` should be safe to call
+twice.
 
-Custom resources:
+## ResourceRegistry
 
-```python
-from pkl import Resource
+Maps plugins to resources.
 
-class DatabaseConnection(Resource):
-    def _cleanup(self):
-        self.conn.close()
-```
+| Method | |
+|---|---|
+| `register(plugin, resource)` | Record that `resource` belongs to `plugin`. |
+| `unregister(plugin, resource) -> bool` | Forget it without releasing. |
+| `release(plugin)` | Release every resource of `plugin`, newest first. |
+| `release_all()` | The same for every plugin, newest plugin first. |
+| `resources(plugin)`, `plugins()` | Snapshots, oldest first. |
 
-### ResourceManager
+`release` keeps going when a resource raises and then raises an `ExceptionGroup` with all the errors. Resources
+registered while releasing are released too. It is thread-safe and idempotent.
 
-Tracks all resources and handles cleanup:
+## Extensions
 
-```python
-# Automatic registration for built-in resources
-timer = pkl.set_timeout(my_func, 5.0)  # Auto-registered
-
-# Manual registration for custom resources
-conn = DatabaseConnection(plugin, "localhost")
-plugin.host.resource_manager.register(conn)
-```
-
-## Plugin Context
-
-The "current plugin" is tracked using context variables (thread-safe and async-safe):
-
-```python
-from pkl import get_current_plugin
-
-def my_function():
-    plugin = get_current_plugin()
-    print(f"Running as: {plugin.name}")
-```
-
-### Context Switches
-
-Context automatically switches during:
-
-- Plugin enable/disable
-- Event handler execution
-- API calls with `@syscall`
-
-```python
-# Plugin A code
-@syscall
-def my_api():
-    # Always runs as Plugin A
-    print(get_current_plugin().name)  # "a"
-
-# Plugin B code
-from pkl.plugins import a
-
-a.my_api()  # Context switches: B → A → B
-```
-
-## Event System
-
-Events come in two flavors:
-
-### Plugin Events
-
-Owned by a plugin, only that plugin can invoke:
-
-```python
-# In Plugin A
-@event()
-def user_login(username: str):
-    print(f"User logging in: {username}")
-    yield  # Handlers run here
-    print("Login complete")
-
-# Other plugins can only subscribe
-# Plugin B
-from pkl.plugins import a
-
-def on_login(username):
-    print("Handling login...")
-
-a.user_login += on_login  # ✅ Subscribe OK
-# a.user_login("alice")    # ❌ RuntimeError: Only Plugin A can invoke
-```
-
-### Host Events
-
-System-wide events with no owner. Defined outside plugin context:
-
-```python
-# host_events.py - defined before plugins load
-import pkl
-
-@pkl.event()
-def system_started():
-    """Automatically becomes a host event (no plugin context)."""
-    print("System starting...")
-    yield
-
-# Any plugin can subscribe
-from host_events import system_started
-
-def on_start():
-    print("Plugin sees startup!")
-
-system_started += on_start
-```
-
-## Lifecycle
-
-### Plugin Lifecycle States
-
-```
-UNLOADED → LOADED → ENABLED → DISABLED
-                        ↓
-                     ERROR
-```
-
-- **UNLOADED**: Plugin doesn't exist yet
-- **LOADED**: Module loaded, ready to enable
-- **ENABLED**: Running, resources active
-- **DISABLED**: Stopped, all resources cleaned up
-- **ERROR**: Failed to load or enable
-
-### Lifecycle Events
-
-Plugins can hook into their own lifecycle:
-
-```python
-from pkl import get_current_plugin
-
-plugin = get_current_plugin()
-
-@plugin.on_disable.on
-def cleanup():
-    print("Plugin is being disabled!")
-
-# Or using += operator:
-# plugin.on_disable += cleanup
-plugin.on_unload += lambda: print("Plugin unloading")
-```
-
-## Resource Cleanup
-
-When a plugin is disabled:
-
-1. **Lifecycle events fire** - `on_disable` handlers run
-2. **Resources cleaned up** - In reverse registration order
-3. **Plugin disabled** - State transitions to DISABLED
-
-All automatic - no manual cleanup needed!
-
-```python
-# Plugin code
-logger = pkl.get_logger("db")
-timer = pkl.set_timeout(task, 10.0)
-event_sub = other_plugin.some_event += handler
-
-# Later...
-plugin.disable()
-# ✓ Timer cancelled
-# ✓ Event subscription removed  
-# ✓ Logger disabled
-# All automatic!
-```
-
-## Type Safety
-
-PKL is fully typed with strict type checking:
-
-```python
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from pkl import Plugin
-
-def process_plugin(plugin: Plugin) -> None:
-    reveal_type(plugin.name)  # str
-    reveal_type(plugin.state)  # PluginState
-```
-
-## Async Support
-
-Context variables work across async/await:
-
-```python
-from pkl import syscall
-
-@syscall
-async def async_api():
-    await asyncio.sleep(1)
-    # Context still preserved!
-    plugin = get_current_plugin()
-    print(plugin.name)  # Correct
-```
-
-## Next Steps
-
-- [Creating Plugins](../guide/creating-plugins.md) - Build your first plugin
-- [Events](../guide/events.md) - Master the event system
-- [Resources](../guide/resources.md) - Create custom resources
-- [API Reference](../api/index.md) - Detailed API docs
+Everything else (`pkl.tracking`, `events`, `syscall`, `timing`, `files`, `modules`) is an extension. The dependency
+rule is one-way: the core never imports an extension, and extensions only import the core and `pkl.tracking`, never
+each other. A test enforces it. Your own extensions follow the same rule and get the same treatment as ours.

@@ -1,5 +1,5 @@
-site_name: PKL - Plugin Hosting System
-site_description: A Python plugin system with automatic resource management
+site_name: pkl
+site_description: Attribute resources to plugins and release them on demand
 site_author: xpodev
 site_url: https://xpodev.github.io/pkl
 
@@ -63,15 +63,14 @@ nav:
   - Home: index.md
   - Getting Started:
     - Installation: getting-started/installation.md
-    - Quick Start: getting-started/quick-start.md
     - Core Concepts: getting-started/concepts.md
+    - Quick Start: getting-started/quick-start.md
   - User Guide:
-    - Creating Plugins: guide/creating-plugins.md
-    - Loading Plugins: guide/loading-plugins.md
-    - Resources: guide/resources.md
+    - Lifetimes: guide/lifetimes.md
+    - Tracking: guide/tracking.md
     - Events: guide/events.md
-    - Context & API: guide/context-api.md
-    - Lifecycle: guide/lifecycle.md
-    - Logging: guide/logging.md
+    - Context, Async & Threads: guide/context.md
+    - Timers, Files & Modules: guide/resources.md
+    - Building an SDK: guide/sdk.md
   - API Reference: api/index.md
   - Examples: examples/overview.md

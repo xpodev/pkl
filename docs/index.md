@@ -1,88 +1,29 @@
-# PKL - Plugin Hosting System
+# pkl
 
-<p align="center">
-  <em>A Python plugin system with automatic resource management, inspired by operating system concepts.</em>
-</p>
+Attribute resources to plugins, and release them whenever you decide a lifetime ends.
 
----
-
-## Overview
-
-**PKL** treats plugins like processes in an operating system. Each plugin has its own resources, and the system keeps track of everything. When a plugin is disabled, all of its resources are automatically cleaned up.
-
-## Key Features
-
-✨ **Automatic Resource Management** - All plugin resources are tracked and cleaned up automatically
-
-🔄 **Lifecycle Events** - Register handlers for `on_disable` and `on_unload` events
-
-🎯 **Context Preservation** - Functions maintain plugin context with `@syscall` decorator
-
-📡 **Flexible Event System** - Plugin events and host events with automatic context detection
-
-⚡ **Async Support** - Full async/await support with context variable propagation
-
-🔌 **Child Plugins** - Plugins can load and manage other plugins
-
-🎨 **Custom Resources** - Define your own resource types (routes, workers, etc.)
-
-🔒 **Type Safety** - Full typing support with strict type checking
-
-🪝 **System Hooks** - Monitor plugin lifecycle and context switches
-
-## Quick Example
+A plugin system has to answer two questions: **who is running right now?** and **who owns what?**
+That is the whole core of pkl. It never decides what "enable", "disable" or "uninstall" mean:
+a *registry is a lifetime*, and you call `release(plugin)` whenever you want.
 
 ```python
-import pkl
-from pathlib import Path
+from pkl import Plugin, PluginTracker, ResourceRegistry
 
-# Create a host
-host = pkl.PluginHost()
-pkl.set_default_host(host)
+plugins = PluginTracker[Plugin]()
+disable = ResourceRegistry[Plugin]()      # a lifetime
 
-# Load and enable a plugin
-plugin = pkl.load_plugin(Path("./my_plugin"))
-plugin.enable()
+class Connection:                         # anything with release() is a resource
+    def release(self) -> None:
+        print("closed")
 
-# Use the plugin's API
-from pkl.plugins import my_plugin
-my_plugin.do_something()
+alpha = Plugin()
+with plugins.executing(alpha):
+    disable.register(plugins.require_current(), Connection())
 
-# Clean up
-plugin.disable()  # All resources automatically cleaned up!
+disable.release(alpha)                    # prints "closed"
 ```
 
-## What Makes PKL Different?
-
-Unlike traditional plugin systems, PKL provides:
-
-- **Automatic cleanup** - Never worry about leaked resources
-- **Context tracking** - Always know which plugin is active
-- **Event lifecycle** - Subscriptions automatically removed when plugins disable
-- **Host events** - System-wide events for inter-plugin communication
-- **Type-safe** - Full IDE support and type checking
-
-## Installation
-
-Using [uv](https://docs.astral.sh/uv/) (recommended):
-
-```bash
-uv pip install pkl
-```
-
-Or with pip:
-
-```bash
-pip install pkl
-```
-
-## Next Steps
-
-- [Quick Start](getting-started/quick-start.md) - Get started in 5 minutes
-- [Core Concepts](getting-started/concepts.md) - Understand how PKL works
-- [User Guide](guide/creating-plugins.md) - Learn to create plugins
-- [Examples](examples/overview.md) - See real-world examples
-
-## License
-
-MIT License - see [LICENSE](https://github.com/xpodev/pkl/blob/main/LICENSE) for details.
+- [Core concepts](getting-started/concepts.md): `Plugin`, `PluginTracker`, `Resource`, `ResourceRegistry`.
+- [Quick start](getting-started/quick-start.md): from nothing to automatic tracking.
+- [Lifetimes](guide/lifetimes.md): disable, uninstall, or any lifetime of your own.
+- [Building an SDK](guide/sdk.md): the intended way to use pkl in an application.
