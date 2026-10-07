@@ -39,3 +39,22 @@ def test_zones_example_keeps_hosts_independent() -> None:
     assert "forest tracks 1 resource(s)" in out
     assert "desert tracks 1 resource(s)" in out
     assert "after releasing forest: forest=0, desert=1" in out
+
+
+def test_dependencies_example_releases_dependants_first() -> None:
+    out = run("dependencies.py")
+    first, second = out.split("disable database")
+    assert [line.strip() for line in first.splitlines()[1:]] == ["dashboard: released", "api: released"]
+    assert [line.strip() for line in second.splitlines()[1:]] == [
+        "reports: released",
+        "database: released",
+    ]
+
+
+def test_nested_example_releases_the_whole_hosted_world() -> None:
+    out = run("nested.py")
+    assert "framework owns 1 resource (the host)" in out
+    assert "the host runs 2 plugins, 2 timers" in out
+    assert "host released: True" in out
+    assert "timers left: 0" in out
+    assert out.strip().splitlines()[-1] == "  timers left: 0"  # nothing ticked after the release

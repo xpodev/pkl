@@ -71,6 +71,8 @@ nav:
     - Events: guide/events.md
     - Context, Async & Threads: guide/context.md
     - Timers, Files & Modules: guide/resources.md
+    - Dependencies: guide/dependencies.md
+    - Hosts as Resources: guide/hosting.md
     - Building an SDK: guide/sdk.md
   - API Reference: api/index.md
   - Examples: examples/overview.md

@@ -114,3 +114,22 @@ def the_event_decorator_keeps_signatures() -> None:
     left("a")  # type: ignore[call-arg]
     joined.subscribe(lambda name: None)
     assert isinstance(joined, Event)
+
+
+def hosts_and_dependencies_are_typed() -> None:
+    from pkl.dependencies import Dependency, depends_on, require
+    from pkl.hosting import PluginHost
+
+    outer = ResourceTracker(PluginTracker[Plugin](), ResourceRegistry[Plugin](), allow_orphans=True)
+    host = PluginHost[AppPlugin].with_tracker(outer)()
+    assert_type(host.plugins, PluginTracker[AppPlugin])
+    assert_type(host.plugins.current, AppPlugin | None)
+    registry = host.registry()
+    assert_type(registry.plugins(), tuple[AppPlugin, ...])
+    assert_type(host.tracker_for(registry), ResourceTracker[AppPlugin])
+    registry.register(Plugin(), Timer())  # type: ignore[arg-type]
+
+    link = depends_on(registry, AppPlugin(), AppPlugin())
+    assert_type(link, Dependency[AppPlugin])
+    depends_on(registry, Plugin(), AppPlugin())  # type: ignore[misc]
+    assert_type(require(host.tracker_for(registry), AppPlugin()), Dependency[AppPlugin])

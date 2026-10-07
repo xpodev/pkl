@@ -64,6 +64,6 @@ registered while releasing are released too. It is thread-safe and idempotent.
 
 ## Extensions
 
-Everything else (`pkl.tracking`, `events`, `syscall`, `timing`, `files`, `modules`) is an extension. The dependency
+Everything else (`pkl.tracking`, `events`, `syscall`, `timing`, `files`, `modules`, `dependencies`, `hosting`) is an extension. The dependency
 rule is one-way: the core never imports an extension, and extensions only import the core and `pkl.tracking`, never
 each other. A test enforces it. Your own extensions follow the same rule and get the same treatment as ours.

@@ -77,6 +77,8 @@ Extensions are plain modules in the package. They depend on the core (and on `tr
 | `pkl.timing` | `Timer.timeout(...)` / `Timer.interval(...)`: cancelled on release, callbacks run as their owner. |
 | `pkl.files` | `File`, `Directory`, `TempFile`, `TempDirectory`: deleted on release. |
 | `pkl.modules` | `ModuleResource`: load a file or package under a dotted name, unload it on release. |
+| `pkl.dependencies` | `depends_on` / `require`: a dependant is a resource of its dependency, so releasing a plugin releases everything that depends on it. |
+| `pkl.hosting` | `PluginHost`: a host (plugin tracker + lifetimes) as a resource, so a plugin can own a whole nested world that is released with it. |
 
 Bring your own: subclass `Tracked`, implement `on_release`, and your resource gets the same automatic tracking.
 
@@ -128,6 +130,8 @@ their entry point with `plugins.bind(fn)` (it captures the plugin executing now)
 ```bash
 python examples/main.py    # two plugins, one host, disable vs uninstall lifetimes
 python examples/zones.py   # several independent hosts in one process
+python examples/dependencies.py   # releasing a plugin releases its dependants
+python examples/nested.py  # a plugin that owns a plugin host
 ```
 
 ## Development

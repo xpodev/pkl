@@ -25,6 +25,16 @@
 `protected` limits *invoking* to the owner; subscribing is always open. `Subscription` (a `Callback`), `EventPermissionError`,
 `EventReleasedError`.
 
+## `pkl.dependencies`
+
+`depends_on(registry, dependant, dependency) -> Dependency`, `require(tracker, dependency)` (the executing plugin is the
+dependant). `Dependency`: `dependant`, `dependency`, `registry`, `active`, `unlink()`.
+
+## `pkl.hosting`
+
+`PluginHost[Q](plugins=None)`: a `Tracked` resource. `plugins`, `registry()`, `tracker_for(registry, allow_orphans=False)`,
+`registries`. `HostedRegistry`, `HostReleasedError`.
+
 ## `pkl.syscall`
 
 `syscall(plugins, func)`.

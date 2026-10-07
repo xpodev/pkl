@@ -13,6 +13,24 @@ disappears), disables `alpha` (timer and temp file go, the data directory stays)
 python examples/main.py
 ```
 
+## `examples/dependencies.py`: dependants as resources
+
+`api` depends on `database` and `dashboard` on `api`; releasing a plugin releases everything that depends on it, dependants
+first. See [Dependencies](../guide/dependencies.md).
+
+```bash
+python examples/dependencies.py
+```
+
+## `examples/nested.py`: a plugin that owns a host
+
+A `framework` plugin runs plugins of its own in a `PluginHost` that it owns; releasing `framework` releases the whole
+nested world, timers included. See [Hosts as resources](../guide/hosting.md).
+
+```bash
+python examples/nested.py
+```
+
 ## `examples/zones.py`: several hosts in one process
 
 Each zone owns its own `PluginTracker` and `ResourceRegistry`; one `Timer` class serves all of them through

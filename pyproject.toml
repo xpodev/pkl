@@ -10,7 +10,7 @@ pkl = ["py.typed", "*.pyi"]
 
 [project]
 name = "plugins-kernel"
-version = "0.2.0"
+version = "0.2.1"
 description = "A tiny core for attributing resources to plugins and releasing them on demand, plus composable extensions"
 readme = "README.md"
 requires-python = ">=3.11"

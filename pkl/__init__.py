@@ -20,7 +20,7 @@ from .plugin_tracker import PluginTracker
 from .registry import ResourceRegistry
 from .resource import Resource
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 __all__ = [
     "Plugin",
