@@ -17,7 +17,9 @@ user_joined("Alice")                 # only the owner may invoke
 - **Invoking** is for the owner only: a plugin-owned event can only be invoked while that plugin executes; a host-owned
   event only from the host. Otherwise `EventPermissionError`.
 - **Subscribing** is open to everyone, unless the event is `protected=True`: then only the owner may subscribe.
-- Handlers run **as their subscriber** (as the host for host subscriptions) and the invoker's plugin is restored after.
+- A subscription is a `Callback` created *as whoever called `subscribe`*, so its handler runs **as its subscriber** (as the
+  host for host subscriptions) wherever and by whomever the event is invoked, and the invoker's plugin is restored after.
+  An API that is not a `syscall` runs as its caller, so a subscription made inside it still belongs to the caller.
 - A subscription is a resource **of the subscriber**: releasing the subscriber's lifetime removes its handlers.
   Releasing the event drops all subscriptions. A released event raises `EventReleasedError`.
 

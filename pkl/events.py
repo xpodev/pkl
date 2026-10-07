@@ -25,6 +25,7 @@ handlers::
 
 from __future__ import annotations
 
+import dataclasses
 import inspect
 import threading
 from collections.abc import Callable
@@ -32,7 +33,7 @@ from typing import Any, Generic, ParamSpec, Self
 
 from .errors import PklError
 from .plugin import Plugin
-from .tracking import Tracked
+from .tracking import Callback, CallbackReleasedError, Tracked
 
 __all__ = [
     "Event",
@@ -56,36 +57,34 @@ def _describe(plugin: Plugin | None) -> str:
     return "the host" if plugin is None else repr(plugin)
 
 
-class Subscription(Generic[Params]):
+class Subscription(Callback[Params, object]):
     """A handler's subscription to an event.
 
-    It is a resource of the subscriber: releasing it - by hand, or by releasing
-    the subscriber's lifetime - removes the handler from the event. A
+    A subscription is a ``Callback`` created by whoever subscribed: it runs the
+    handler as the subscriber, wherever and by whomever the event is invoked,
+    and it is a resource of the subscriber. Releasing it - by hand, or by
+    releasing the subscriber's lifetime - removes the handler from the event. A
     subscription made by the host (no plugin executing) belongs to nobody and
     lasts until the event or the subscription itself is released.
     """
 
-    def __init__(
-        self, event: Event[Params], handler: Callable[Params, object], subscriber: Plugin | None
-    ) -> None:
+    def __init__(self, event: Event[Params], handler: Callable[Params, object]) -> None:
+        super().__init__(handler)
         self.event = event
-        self.handler = handler
-        self.subscriber = subscriber
-        self._active = True
 
     @property
-    def active(self) -> bool:
-        """Whether the handler is still subscribed."""
-        return self._active
+    def handler(self) -> Callable[Params, object]:
+        """The subscribed handler."""
+        return self.func
 
-    def release(self) -> None:
-        """Remove the handler from the event. Safe to call more than once."""
-        if not self._active:
-            return
-        self._active = False
+    @property
+    def subscriber(self) -> Plugin | None:
+        """The plugin that subscribed, or ``None`` for the host."""
+        return self.owner
+
+    def on_release(self) -> None:
         self.event._remove(self)
-        if self.subscriber is not None:
-            self.event.tracker.registry.unregister(self.subscriber, self)
+        super().on_release()
 
 
 class Event(Tracked[Any], Generic[Params]):
@@ -125,13 +124,19 @@ class Event(Tracked[Any], Generic[Params]):
                 f"event {self.name!r} is protected and can only be subscribed to by "
                 f"{_describe(self.owner)}"
             )
-        subscription = Subscription(self, handler, subscriber)
+        # The subscription is a callback created *as the subscriber* (this code
+        # runs as whoever called subscribe, even if it is the event owner's
+        # non-syscall API), so it runs the handler as the subscriber later.
+        # Host subscribers are always fine, whatever the tracker says about orphans.
+        variant: Any = Subscription._variant(dataclasses.replace(self.tracker, allow_orphans=True))
+        subscription: Subscription[Params] = variant(self, handler)
         with self._lock:
-            if self.released:
-                raise EventReleasedError(f"event {self.name!r} was released")
-            self._subscriptions.append(subscription)
-        if subscriber is not None:
-            self.tracker.registry.register(subscriber, subscription)
+            accepted = not self.released
+            if accepted:
+                self._subscriptions.append(subscription)
+        if not accepted:
+            subscription.release()  # outside the lock: releasing takes it
+            raise EventReleasedError(f"event {self.name!r} was released")
         return subscription
 
     def unsubscribe(self, handler: Callable[Params, object]) -> bool:
@@ -188,10 +193,10 @@ class Event(Tracked[Any], Generic[Params]):
         if generator is False:
             return
         for subscription in self.subscriptions:
-            if not subscription.active:
-                continue
-            with self.tracker.plugins.executing(subscription.subscriber):
-                subscription.handler(*args, **kwargs)
+            try:
+                subscription(*args, **kwargs)  # runs as the subscriber
+            except CallbackReleasedError:
+                continue  # unsubscribed while this invocation was in progress
         self._finish(generator)
 
     async def emit(self, *args: Params.args, **kwargs: Params.kwargs) -> None:
@@ -205,12 +210,12 @@ class Event(Tracked[Any], Generic[Params]):
         if generator is False:
             return
         for subscription in self.subscriptions:
-            if not subscription.active:
+            try:
+                result = subscription(*args, **kwargs)  # runs as the subscriber
+            except CallbackReleasedError:
                 continue
-            with self.tracker.plugins.executing(subscription.subscriber):
-                result = subscription.handler(*args, **kwargs)
-                if inspect.isawaitable(result):
-                    await result
+            if inspect.isawaitable(result):
+                await result
         self._finish(generator)
 
     def _check_invoker(self) -> None:
