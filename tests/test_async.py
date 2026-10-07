@@ -18,7 +18,7 @@ class Env:
 
 
 class Item(Tracked[Plugin]):
-    def _release(self) -> None: ...
+    def on_release(self) -> None: ...
 
 
 async def test_interleaved_plugins_never_see_each_other() -> None:

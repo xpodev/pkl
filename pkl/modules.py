@@ -143,7 +143,7 @@ class ModuleResource(Tracked[Any]):
             raise
         self.module: ModuleType = module
 
-    def _release(self) -> None:
+    def on_release(self) -> None:
         # Another load may have replaced our module; never unload someone else's.
         if sys.modules.get(self.name) is self.module:
             _purge(self.name)

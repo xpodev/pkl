@@ -251,7 +251,7 @@ class Event(Tracked[Any], Generic[Params]):
             except ValueError:
                 pass
 
-    def _release(self) -> None:
+    def on_release(self) -> None:
         with self._lock:
             subscriptions = list(self._subscriptions)
         for subscription in subscriptions:

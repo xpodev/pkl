@@ -31,7 +31,7 @@ class Probe(Tracked[Plugin]):
         if fail:
             raise ValueError("init failed")
 
-    def _release(self) -> None:
+    def on_release(self) -> None:
         self.releases += 1
 
 
@@ -109,7 +109,7 @@ def test_binding_by_class_keyword_is_inherited() -> None:
     env, plugin = Env(), Plugin()
 
     class Base(Tracked[Plugin], tracker=env.tracker):
-        def _release(self) -> None: ...
+        def on_release(self) -> None: ...
 
     class Child(Base): ...
 
@@ -125,10 +125,10 @@ def test_two_bindings_coexist_with_independent_lifetimes() -> None:
     runtime, persistent = ResourceRegistry[Plugin](), ResourceRegistry[Plugin]()
 
     class RuntimeResource(Tracked[Plugin], tracker=ResourceTracker(plugins, runtime)):
-        def _release(self) -> None: ...
+        def on_release(self) -> None: ...
 
     class PersistentResource(Tracked[Plugin], tracker=ResourceTracker(plugins, persistent)):
-        def _release(self) -> None: ...
+        def on_release(self) -> None: ...
 
     plugin = Plugin()
     with plugins.executing(plugin):
@@ -159,7 +159,7 @@ def test_with_tracker_can_be_forbidden() -> None:
     env = Env()
 
     class Sealed(Tracked[Plugin], tracker=env.tracker, allow_tracker_override=False):
-        def _release(self) -> None: ...
+        def on_release(self) -> None: ...
 
     class Derived(Sealed): ...
 
@@ -196,7 +196,7 @@ def test_release_error_still_unregisters() -> None:
     env, plugin = Env(), Plugin()
 
     class Failing(Tracked[Plugin], tracker=env.tracker):
-        def _release(self) -> None:
+        def on_release(self) -> None:
             raise OSError("nope")
 
     with env.plugins.executing(plugin):

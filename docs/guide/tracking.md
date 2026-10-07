@@ -25,7 +25,7 @@ class RuntimeResource(Tracked[AppPlugin], tracker=ResourceTracker(plugins, runti
 class PersistentResource(Tracked[AppPlugin], tracker=ResourceTracker(plugins, persistent)): ...
 ```
 
-Subclasses implement `_release()`. Properties: `owner` (typed as your plugin), `tracker`, `released`. Lifetime is
+Subclasses implement `on_release()`. Properties: `owner` (typed as your plugin), `tracker`, `released`. Lifetime is
 therefore not a library type: two bases bound to two registries are two lifetimes.
 
 Instantiating a class that is not bound to a tracker raises `UnboundResourceError`.
@@ -47,6 +47,6 @@ design.
 class Socket(RuntimeResource):
     def __init__(self, address: str) -> None:
         self.connection = connect(address)       # self.owner is already available here
-    def _release(self) -> None:
+    def on_release(self) -> None:
         self.connection.close()
 ```

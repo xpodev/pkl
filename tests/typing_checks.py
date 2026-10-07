@@ -34,7 +34,7 @@ class Timer:
 
 def tracked_owner_is_typed() -> None:
     class Resource(Tracked[AppPlugin]):
-        def _release(self) -> None: ...
+        def on_release(self) -> None: ...
 
     resource = Resource()
     assert_type(resource.owner, AppPlugin | None)

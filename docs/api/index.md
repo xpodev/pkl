@@ -15,7 +15,7 @@
 | Name | |
 |---|---|
 | `ResourceTracker[P](plugins, registry, allow_orphans=False)` | `current_owner()`, `track(resource)`. |
-| `Tracked[P]` | Auto-registering base. Class keywords `tracker=`, `allow_tracker_override=`. `owner`, `tracker`, `released`, `release()`, `with_tracker(tracker)`, `executing_as_owner()`; implement `_release()`. |
+| `Tracked[P]` | Auto-registering base. Class keywords `tracker=`, `allow_tracker_override=`. `owner`, `tracker`, `released`, `release()`, `with_tracker(tracker)`, `executing_as_owner()`; implement `on_release()`. |
 | `UnboundResourceError`, `TrackerOverrideError` | Errors. |
 
 ## `pkl.events`

@@ -126,13 +126,13 @@ class Tracked(Generic[P], metaclass=TrackedMeta):
         class RuntimeResource(Tracked[AppPlugin], tracker=ResourceTracker(plugins, runtime)): ...
 
         class Timer(RuntimeResource):
-            def _release(self) -> None: ...
+            def on_release(self) -> None: ...
 
     Creating a ``Timer`` then attributes it to ``plugins.current`` and records
     it in ``runtime``. The owner is known from the start of ``__init__``.
 
-    Subclasses implement ``_release``. ``release()`` is idempotent, calls
-    ``_release`` once, and then forgets the resource, so releasing a resource
+    Subclasses implement ``on_release``. ``release()`` is idempotent, calls
+    ``on_release`` once, and then forgets the resource, so releasing a resource
     by hand leaves no stale entry in the registry.
 
     A single process can serve several trackers from one class with
@@ -241,12 +241,12 @@ class Tracked(Generic[P], metaclass=TrackedMeta):
                 return
             self._pkl_released = True
         try:
-            self._release()
+            self.on_release()
         finally:
             owner = self._pkl_owner
             if owner is not None:
                 self._pkl_resource_tracker.registry.unregister(owner, self)
 
     @abstractmethod
-    def _release(self) -> None:
+    def on_release(self) -> None:
         """Do the actual releasing. Called at most once."""

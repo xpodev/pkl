@@ -69,7 +69,7 @@ class Timer(Tracked[Any]):
         else:
             self.release()
 
-    def _release(self) -> None:
+    def on_release(self) -> None:
         with self._timer_lock:
             if self._timer is not None:
                 self._timer.cancel()

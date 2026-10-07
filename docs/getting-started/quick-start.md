@@ -29,7 +29,7 @@ from pkl.tracking import ResourceTracker, Tracked
 class RuntimeResource(Tracked[Plugin], tracker=ResourceTracker(plugins, registry)): ...
 
 class Worker(RuntimeResource):
-    def _release(self) -> None:
+    def on_release(self) -> None:
         print("worker stopped")
 
 with plugins.executing(alpha):

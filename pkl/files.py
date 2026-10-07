@@ -25,7 +25,7 @@ class File(Tracked[Any]):
     def __init__(self, path: str | os.PathLike[str]) -> None:
         self.path = Path(path)
 
-    def _release(self) -> None:
+    def on_release(self) -> None:
         self.path.unlink(missing_ok=True)
 
 
@@ -35,7 +35,7 @@ class Directory(Tracked[Any]):
     def __init__(self, path: str | os.PathLike[str]) -> None:
         self.path = Path(path)
 
-    def _release(self) -> None:
+    def on_release(self) -> None:
         try:
             shutil.rmtree(self.path)
         except FileNotFoundError:

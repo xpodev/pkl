@@ -78,7 +78,7 @@ Extensions are plain modules in the package. They depend on the core (and on `tr
 | `pkl.files` | `File`, `Directory`, `TempFile`, `TempDirectory`: deleted on release. |
 | `pkl.modules` | `ModuleResource`: load a file or package under a dotted name, unload it on release. |
 
-Bring your own: subclass `Tracked`, implement `_release`, and your resource gets the same automatic tracking.
+Bring your own: subclass `Tracked`, implement `on_release`, and your resource gets the same automatic tracking.
 
 ### Automatic tracking
 
