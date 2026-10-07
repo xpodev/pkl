@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 
 from pkl import Plugin, PluginTracker, ResourceRegistry
-from pkl.events import Event, EventPermissionError
+from pkl.events import EventPermissionError, event_decorator
 from pkl.modules import ModuleResource
 from pkl.syscall import syscall
 from pkl.tracking import ResourceTracker
@@ -25,9 +25,13 @@ from pkl.tracking import ResourceTracker
 PROVIDER = '''
 import SDK
 
-@SDK.Event
+@SDK.event
 def ready(name):
     """The provider announces something."""
+
+@SDK.event(protected=False)
+def open_ready(name):
+    """Anybody may invoke this one."""
 
 callbacks = []
 seen = []
@@ -67,6 +71,14 @@ provider.register(on_value)
 @provider.ready.on
 def on_ready(name):
     seen.append(("event handler ran as", SDK.plugins.current, name))
+
+@provider.open_ready.on
+def on_open_ready(name):
+    seen.append(("open handler ran as", SDK.plugins.current, name))
+
+def poke_open_event():
+    """The consumer invokes the provider's unprotected event itself."""
+    provider.open_ready("poked")
 '''
 
 
@@ -81,7 +93,7 @@ class World:
         self.sdk = ModuleType(f"{prefix}_SDK")
         self.sdk.plugins = self.plugins  # type: ignore[attr-defined]
         self.sdk.tracker = self.tracker  # type: ignore[attr-defined]
-        self.sdk.Event = Event[Any].with_tracker(self.tracker)  # type: ignore[attr-defined]
+        self.sdk.event = event_decorator(self.tracker)  # type: ignore[attr-defined]
         self.sdk.syscall = lambda func: syscall(self.plugins, func)  # type: ignore[attr-defined]
         self.module_type = ModuleResource.with_tracker(self.tracker)
         sys.modules[self.sdk.__name__] = self.sdk
@@ -162,6 +174,16 @@ def test_a_syscall_runs_as_the_provider_while_a_plain_api_does_not(
     assert ("announce ran as", provider) in provider_module.seen
     # The consumer's handler ran as the consumer, not as whoever invoked the event.
     assert consumer_module.seen[-1] == ("event handler ran as", consumer, "hello")
+
+
+def test_an_unprotected_event_can_be_invoked_by_another_plugin(
+    loaded: tuple[World, Plugin, Plugin, ModuleType, ModuleType],
+) -> None:
+    world, provider, consumer, _, consumer_module = loaded
+    with world.plugins.executing(consumer):
+        consumer_module.poke_open_event()
+    # Invoked by the consumer, handled by the consumer's own subscription - as the consumer.
+    assert consumer_module.seen[-1] == ("open handler ran as", consumer, "poked")
 
 
 def test_releasing_the_consumer_silences_its_callbacks_and_handlers(

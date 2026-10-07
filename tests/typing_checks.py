@@ -10,7 +10,7 @@ from collections.abc import Generator
 from typing import assert_type
 
 from pkl import Plugin, PluginTracker, ResourceRegistry
-from pkl.events import Event
+from pkl.events import Event, event_decorator
 from pkl.syscall import syscall
 from pkl.tracking import ResourceTracker, Tracked
 
@@ -95,3 +95,22 @@ def bind_and_callback_preserve_signatures() -> None:
     callback = tracker.callback(add)
     assert_type(callback(1, 2), int)
     callback("1", 2)  # type: ignore[arg-type]
+
+
+def the_event_decorator_keeps_signatures() -> None:
+    plugins = PluginTracker[Plugin]()
+    tracker = ResourceTracker(plugins, ResourceRegistry[Plugin](), allow_orphans=True)
+    event = event_decorator(tracker)
+
+    @event
+    def joined(name: str) -> None: ...
+
+    @event(protected=False)
+    def left(name: str, reason: int) -> None: ...
+
+    joined("a")
+    joined(1)  # type: ignore[arg-type]
+    left("a", 1)
+    left("a")  # type: ignore[call-arg]
+    joined.subscribe(lambda name: None)
+    assert isinstance(joined, Event)

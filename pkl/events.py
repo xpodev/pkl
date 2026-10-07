@@ -1,22 +1,27 @@
 """Events: a plugin (or the host) announces something, others react to it.
 
 An ``Event`` is a resource. Whoever creates it owns it - a plugin, or the host
-when no plugin is executing - and only the owner may invoke it. Other plugins
-subscribe; their subscriptions are resources of the *subscriber*, so releasing
-a subscriber's lifetime removes its handlers.
+when no plugin is executing. By default only the owner may invoke it
+(``protected``); anybody may subscribe. Subscriptions are resources of the
+*subscriber*, so releasing a subscriber's lifetime removes its handlers. There
+is no subscription control: an event that must not be subscribed to should not
+be part of the plugin's public API.
 
-Bind ``Event`` to an application's lifetime like any other ``Tracked``
-resource::
+Create events with the decorator that ``event_decorator`` builds for your
+application's lifetime (once, in the SDK)::
 
-    class Event(events.Event[Params], RuntimeResource): ...
+    event = events.event_decorator(runtime_tracker)
 
-    @Event
+    @event
     def user_joined(name: str) -> None: ...
 
-A generator function gives an event code that runs before and after its
-handlers::
+    @event(protected=False)          # anyone may invoke this one
+    def ping() -> None: ...
 
-    @Event
+A generator function gives an event code that runs before and after its
+handlers, as the owner::
+
+    @event
     def user_joined(name: str) -> Generator[None, None, None]:
         print("before handlers")
         yield
@@ -29,17 +34,19 @@ import dataclasses
 import inspect
 import threading
 from collections.abc import Callable
-from typing import Any, Generic, ParamSpec, Self
+from typing import Any, Generic, ParamSpec, Protocol, Self, cast, overload
 
 from .errors import PklError
 from .plugin import Plugin
-from .tracking import Callback, CallbackReleasedError, Tracked
+from .tracking import Callback, CallbackReleasedError, ResourceTracker, Tracked
 
 __all__ = [
     "Event",
+    "EventDecorator",
     "Subscription",
     "EventPermissionError",
     "EventReleasedError",
+    "event_decorator",
 ]
 
 Params = ParamSpec("Params")
@@ -88,18 +95,20 @@ class Subscription(Callback[Params, object]):
 
 
 class Event(Tracked[Any], Generic[Params]):
-    """An event that plugins can subscribe to and only its owner can invoke.
+    """An event that anybody can subscribe to.
+
+    Prefer the decorator from ``event_decorator`` over calling this directly.
 
     Args:
         func: Defines the event's signature. If it is a generator function, the
             code before its ``yield`` runs before the handlers and the code
-            after it runs after them. Returning (or ending) before the ``yield``
-            cancels the invocation.
-        protected: If true, only the owner may subscribe (a host-owned event
-            can then only be subscribed to by the host).
+            after it runs after them, both as the owner. Returning (or ending)
+            before the ``yield`` cancels the invocation.
+        protected: If true (the default), only the owner may invoke the event.
+            With ``protected=False`` anybody may.
     """
 
-    def __init__(self, func: Callable[Params, Any], *, protected: bool = False) -> None:
+    def __init__(self, func: Callable[Params, Any], *, protected: bool = True) -> None:
         self.name: str = getattr(func, "__name__", repr(func))
         self.__doc__ = func.__doc__
         self.is_protected = protected
@@ -113,17 +122,11 @@ class Event(Tracked[Any], Generic[Params]):
         """Subscribe ``handler`` on behalf of the plugin that is executing.
 
         The handler will run as that plugin (as the host if none is executing).
+        Anybody may subscribe.
 
         Raises:
-            EventPermissionError: If the event is protected and the caller is not its owner.
             EventReleasedError: If the event was released.
         """
-        subscriber = self.tracker.plugins.current
-        if self.is_protected and subscriber is not self.owner:
-            raise EventPermissionError(
-                f"event {self.name!r} is protected and can only be subscribed to by "
-                f"{_describe(self.owner)}"
-            )
         # The subscription is a callback created *as the subscriber* (this code
         # runs as whoever called subscribe, even if it is the event owner's
         # non-syscall API), so it runs the handler as the subscriber later.
@@ -185,7 +188,7 @@ class Event(Tracked[Any], Generic[Params]):
         """Invoke the event, running every handler as its subscriber.
 
         Raises:
-            EventPermissionError: If the caller is not the owner.
+            EventPermissionError: If the event is protected and the caller is not the owner.
             EventReleasedError: If the event was released.
         """
         self._check_invoker()
@@ -221,31 +224,34 @@ class Event(Tracked[Any], Generic[Params]):
     def _check_invoker(self) -> None:
         if self.released:
             raise EventReleasedError(f"event {self.name!r} was released")
-        if self.tracker.plugins.current is not self.owner:
+        if self.is_protected and self.tracker.plugins.current is not self.owner:
             raise EventPermissionError(
-                f"event {self.name!r} can only be invoked by {_describe(self.owner)}"
+                f"event {self.name!r} is protected and can only be invoked by "
+                f"{_describe(self.owner)}"
             )
 
     def _start(self, args: Any, kwargs: Any) -> Any:
         """Run the code before the handlers. Returns False if the invocation is cancelled."""
         if self._generator is None:
             return None
-        generator = self._generator(*args, **kwargs)
-        try:
-            next(generator)
-        except StopIteration:
-            return False
+        # The event's own code is the owner's code, whoever invokes the event.
+        with self.tracker.plugins.executing(self.owner):
+            generator = self._generator(*args, **kwargs)
+            try:
+                next(generator)
+            except StopIteration:
+                return False
         return generator
 
-    @staticmethod
-    def _finish(generator: Any) -> None:
+    def _finish(self, generator: Any) -> None:
         """Run the code after the handlers."""
         if generator is None:
             return
-        try:
-            next(generator)
-        except StopIteration:
-            pass
+        with self.tracker.plugins.executing(self.owner):
+            try:
+                next(generator)
+            except StopIteration:
+                pass
 
     # -- lifetime ------------------------------------------------------------
 
@@ -261,3 +267,46 @@ class Event(Tracked[Any], Generic[Params]):
             subscriptions = list(self._subscriptions)
         for subscription in subscriptions:
             subscription.release()
+
+
+class EventDecorator(Protocol):
+    """What ``event_decorator`` builds: usable as ``@event`` and ``@event(protected=...)``."""
+
+    @overload
+    def __call__(self, func: Callable[Params, Any], /) -> Event[Params]: ...
+
+    @overload
+    def __call__(
+        self, *, protected: bool = True
+    ) -> Callable[[Callable[Params, Any]], Event[Params]]: ...
+
+
+def event_decorator(source: ResourceTracker[Any] | type[Event[Any]]) -> EventDecorator:
+    """Build the ``event`` decorator for an application's lifetime.
+
+    Call this once, in the SDK, with the tracker the events belong to (or with
+    an ``Event`` subclass already bound to one)::
+
+        event = events.event_decorator(runtime_tracker)
+
+        @event
+        def user_joined(name: str) -> None: ...
+
+        @event(protected=False)       # anybody may invoke it
+        def ping() -> None: ...
+
+    The decorated function defines the event's signature; the name becomes the
+    event, owned by the plugin that is executing when it is defined (the host
+    if none is).
+    """
+    event_type: Any = (
+        Event._variant(source) if isinstance(source, ResourceTracker) else source
+    )
+
+    def decorator(func: Any = None, /, *, protected: bool = True) -> Any:
+        def create(function: Callable[..., Any]) -> Event[Any]:
+            return cast("Event[Any]", event_type(function, protected=protected))
+
+        return create if func is None else create(func)
+
+    return cast("EventDecorator", decorator)

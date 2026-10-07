@@ -72,7 +72,7 @@ Extensions are plain modules in the package. They depend on the core (and on `tr
 | Module | Provides |
 |---|---|
 | `pkl.tracking` | `ResourceTracker`, `Tracked` (resources that register themselves under the plugin that created them) and `Callback` (a function bound to its creating plugin, as a resource). |
-| `pkl.events` | `Event`: only the owner invokes it, plugins subscribe, subscriptions die with the subscriber. Generator events run code before/after handlers. `emit()` awaits async handlers. |
+| `pkl.events` | `event_decorator` builds the `@event` decorator: events are invocable only by their owner (`protected=False` opts out), anyone subscribes, subscriptions die with the subscriber. Generator events run code before/after handlers. `emit()` awaits async handlers. |
 | `pkl.syscall` | `syscall`: a function that runs as the plugin that defined it, whoever calls it. Sync and async. |
 | `pkl.timing` | `Timer.timeout(...)` / `Timer.interval(...)`: cancelled on release, callbacks run as their owner. |
 | `pkl.files` | `File`, `Directory`, `TempFile`, `TempDirectory`: deleted on release. |

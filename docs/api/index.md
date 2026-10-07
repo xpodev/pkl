@@ -20,8 +20,10 @@
 
 ## `pkl.events`
 
-`Event[**Params](func, *, protected=False)`: `subscribe`, `unsubscribe`, `on`, `+=`, `-=`, `subscriptions`, call, `emit`.
-`Subscription`, `EventPermissionError`, `EventReleasedError`.
+`event_decorator(tracker)` builds the `@event` / `@event(protected=True)` decorator function.
+`Event[**Params](func, *, protected=True)`: `subscribe`, `unsubscribe`, `on`, `+=`, `-=`, `subscriptions`, call, `emit`.
+`protected` limits *invoking* to the owner; subscribing is always open. `Subscription` (a `Callback`), `EventPermissionError`,
+`EventReleasedError`.
 
 ## `pkl.syscall`
 

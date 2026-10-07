@@ -15,12 +15,14 @@ plugins = PluginTracker[AppPlugin]()
 runtime = ResourceRegistry[AppPlugin]()
 persistent = ResourceRegistry[AppPlugin]()
 
-class RuntimeResource(Tracked[AppPlugin], tracker=ResourceTracker(plugins, runtime),
+runtime_tracker = ResourceTracker(plugins, runtime)
+
+class RuntimeResource(Tracked[AppPlugin], tracker=runtime_tracker,
                       allow_tracker_override=False): ...
 class PersistentResource(Tracked[AppPlugin], tracker=ResourceTracker(plugins, persistent),
                          allow_tracker_override=False): ...
 
-class Event(events.Event[Params], RuntimeResource): ...
+event = events.event_decorator(runtime_tracker)       # @event / @event(protected=False)
 class Timer(timing.Timer, RuntimeResource): ...
 class DataDirectory(files.Directory, PersistentResource): ...
 syscall = partial(pkl.syscall.syscall, plugins)
@@ -38,7 +40,7 @@ A plugin then just uses the SDK:
 ```python
 import sdk
 
-@sdk.Event
+@sdk.event
 def greeted(name: str) -> None: ...
 
 ticker = sdk.Timer.interval(tick, 1.0)

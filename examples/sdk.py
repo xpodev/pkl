@@ -13,14 +13,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from functools import partial
-from typing import Any, ParamSpec
+from typing import Any
 
 from pkl import Plugin, PluginTracker, ResourceRegistry
 from pkl import events, files, modules, timing
 from pkl.syscall import syscall as _syscall
 from pkl.tracking import ResourceTracker, Tracked
-
-Params = ParamSpec("Params")
 
 
 @dataclass(eq=False)  # eq=False: two plugins are the same only if they are the same object
@@ -37,10 +35,13 @@ runtime = ResourceRegistry[AppPlugin]()
 persistent = ResourceRegistry[AppPlugin]()
 
 
+# Resources the host itself creates (host-defined events) belong to no plugin.
+runtime_tracker = ResourceTracker(plugins, runtime, allow_orphans=True)
+
+
 class RuntimeResource(
     Tracked[AppPlugin],
-    # Resources the host itself creates (host-defined events) belong to no plugin.
-    tracker=ResourceTracker(plugins, runtime, allow_orphans=True),
+    tracker=runtime_tracker,
     # A plugin cannot pick another tracker: this SDK is single-host.
     allow_tracker_override=False,
 ): ...
@@ -56,7 +57,8 @@ class PersistentResource(
 # --- what plugins get to use ---------------------------------------------------
 
 
-class Event(events.Event[Params], RuntimeResource): ...
+# `@event` and `@event(protected=False)`: a function, not a class.
+event = events.event_decorator(runtime_tracker)
 
 
 class Timer(timing.Timer, RuntimeResource): ...

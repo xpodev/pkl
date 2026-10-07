@@ -5,7 +5,7 @@ from pathlib import Path
 import sdk
 
 
-@sdk.Event
+@sdk.event
 def greeted(name: str) -> None:
     """Announced whenever somebody is greeted."""
 

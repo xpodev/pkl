@@ -9,7 +9,13 @@ from typing import Any
 import pytest
 
 from pkl import Plugin, PluginTracker, ResourceRegistry
-from pkl.events import Event, EventPermissionError, EventReleasedError, Subscription
+from pkl.events import (
+    Event,
+    EventPermissionError,
+    EventReleasedError,
+    Subscription,
+    event_decorator,
+)
 from pkl.tracking import ResourceTracker
 
 
@@ -20,7 +26,7 @@ class Env:
         self.tracker = ResourceTracker(self.plugins, self.registry, allow_orphans=True)
         self.event_type = Event[Any].with_tracker(self.tracker)
 
-    def event(self, func: Callable[..., Any], *, protected: bool = False) -> Event[Any]:
+    def event(self, func: Callable[..., Any], *, protected: bool = True) -> Event[Any]:
         return self.event_type(func, protected=protected)
 
 
@@ -100,37 +106,128 @@ def test_plugin_event_can_be_invoked_by_its_owner(env: Env) -> None:
     assert received == ["hi"]
 
 
-# --- who may subscribe -------------------------------------------------------
+# --- protected: who may invoke ------------------------------------------------
 
 
-def test_protected_plugin_event_rejects_other_subscribers(env: Env) -> None:
-    owner, other = Plugin(), Plugin()
+def test_events_are_protected_by_default(env: Env) -> None:
+    owner = Plugin()
     with env.plugins.executing(owner):
-        event = env.event(noop, protected=True)
-        event.subscribe(print)  # the owner may
-    with env.plugins.executing(other):
-        with pytest.raises(EventPermissionError, match="protected"):
-            event.subscribe(print)
-    with pytest.raises(EventPermissionError):
-        event.subscribe(print)  # nor may the host
-
-
-def test_protected_host_event_only_accepts_the_host(env: Env) -> None:
-    event = env.event(noop, protected=True)
-    event.subscribe(print)
+        event = env.event_type(noop)
+    assert event.is_protected
     with env.plugins.executing(Plugin()):
-        with pytest.raises(EventPermissionError, match="the host"):
-            event.subscribe(print)
+        with pytest.raises(EventPermissionError, match="protected"):
+            event("x")
 
 
-def test_unprotected_events_accept_any_subscriber(env: Env) -> None:
+def test_unprotected_event_can_be_invoked_by_anyone(env: Env) -> None:
     owner, other = Plugin(), Plugin()
+    received: list[str] = []
     with env.plugins.executing(owner):
-        event = env.event(noop)
-    event.subscribe(print)
+        event = env.event(noop, protected=False)
+        event.subscribe(received.append)
+    event("from the host")
     with env.plugins.executing(other):
-        event.subscribe(print)
-    assert len(event.subscriptions) == 2
+        event("from another plugin")
+    with env.plugins.executing(owner):
+        event("from the owner")
+    assert received == ["from the host", "from another plugin", "from the owner"]
+
+
+def test_unprotected_host_event_can_be_invoked_by_a_plugin(env: Env) -> None:
+    event = env.event(noop, protected=False)
+    received: list[str] = []
+    event.subscribe(received.append)
+    with env.plugins.executing(Plugin()):
+        event("x")
+    assert received == ["x"]
+
+
+def test_there_is_no_subscription_control(env: Env) -> None:
+    owner, other = Plugin(), Plugin()
+    for protected in (True, False):
+        with env.plugins.executing(owner):
+            event = env.event(noop, protected=protected)
+        event.subscribe(print)  # the host
+        with env.plugins.executing(other):
+            event.subscribe(print)  # another plugin
+        with env.plugins.executing(owner):
+            event.subscribe(print)  # the owner
+        assert len(event.subscriptions) == 3
+
+
+def test_generator_code_of_an_unprotected_event_runs_as_the_owner(env: Env) -> None:
+    owner, invoker, subscriber = Plugin(), Plugin(), Plugin()
+    seen: list[tuple[str, Plugin | None]] = []
+
+    def signature(value: str) -> Generator[None, None, None]:
+        seen.append(("before", env.plugins.current))
+        yield
+        seen.append(("after", env.plugins.current))
+
+    with env.plugins.executing(owner):
+        event = env.event(signature, protected=False)
+
+    def handler(value: str) -> None:
+        seen.append(("handler", env.plugins.current))
+
+    with env.plugins.executing(subscriber):
+        event.subscribe(handler)
+    with env.plugins.executing(invoker):
+        event("v")
+        assert env.plugins.current is invoker
+    assert seen == [("before", owner), ("handler", subscriber), ("after", owner)]
+
+
+# --- the decorator -----------------------------------------------------------
+
+
+def test_decorator_creates_events_owned_by_the_defining_plugin(env: Env) -> None:
+    event = event_decorator(env.tracker)
+    plugin = Plugin()
+    with env.plugins.executing(plugin):
+
+        @event
+        def user_joined(name: str) -> None:
+            """Someone joined."""
+
+    assert isinstance(user_joined, Event)
+    assert user_joined.name == "user_joined"
+    assert user_joined.__doc__ == "Someone joined."
+    assert user_joined.owner is plugin
+    assert user_joined.is_protected
+    assert env.registry.resources(plugin) == (user_joined,)
+
+
+def test_decorator_accepts_options(env: Env) -> None:
+    event = event_decorator(env.tracker)
+
+    @event(protected=False)
+    def open_event() -> None: ...
+
+    @event()
+    def default_event() -> None: ...
+
+    assert not open_event.is_protected
+    assert default_event.is_protected
+
+
+def test_decorator_can_be_built_from_a_bound_event_class(env: Env) -> None:
+    class AppEvent(Event[Any], tracker=env.tracker):
+        pass
+
+    event = event_decorator(AppEvent)
+
+    @event
+    def thing() -> None: ...
+
+    assert isinstance(thing, AppEvent)
+
+
+def test_decorator_is_a_plain_function() -> None:
+    import inspect
+
+    env = Env()
+    assert inspect.isfunction(event_decorator(env.tracker))
 
 
 # --- handlers ----------------------------------------------------------------
