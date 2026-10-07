@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+import functools
+import inspect
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Generic, TypeVar
+from typing import Any, Generic, ParamSpec, TypeVar, cast
 
 from .errors import NoCurrentPluginError
 from .plugin import Plugin
@@ -13,6 +15,8 @@ from .plugin import Plugin
 __all__ = ["PluginTracker"]
 
 P = TypeVar("P", bound=Plugin)
+Params = ParamSpec("Params")
+T = TypeVar("T")
 
 
 class PluginTracker(Generic[P]):
@@ -65,3 +69,36 @@ class PluginTracker(Generic[P]):
             yield plugin
         finally:
             self._current.reset(token)
+
+    def bind(self, func: Callable[Params, T]) -> Callable[Params, T]:
+        """Bind ``func`` to the plugin executing *now*.
+
+        The returned function runs as that plugin (as the host if none is
+        executing), whoever calls it and from whichever thread or task, and
+        restores the caller's plugin afterwards. This is the one place that
+        turns "who created this" into "who runs this": use it for callbacks
+        and thread entry points instead of re-entering the plugin by hand.
+
+        ``async`` functions stay ``async`` and run as the plugin across their
+        awaits. A plain function that merely *returns* an awaitable only runs
+        as the plugin while it is being called, not while that is awaited.
+        """
+        return self.bind_as(self._current.get(), func)
+
+    def bind_as(self, plugin: P | None, func: Callable[Params, T]) -> Callable[Params, T]:
+        """Like ``bind``, for an explicit plugin (``None`` runs as the host)."""
+        if inspect.iscoroutinefunction(func):
+
+            @functools.wraps(func)
+            async def async_bound(*args: Any, **kwargs: Any) -> Any:
+                with self.executing(plugin):
+                    return await func(*args, **kwargs)
+
+            return cast("Callable[Params, T]", async_bound)
+
+        @functools.wraps(func)
+        def bound(*args: Any, **kwargs: Any) -> Any:
+            with self.executing(plugin):
+                return func(*args, **kwargs)
+
+        return cast("Callable[Params, T]", bound)

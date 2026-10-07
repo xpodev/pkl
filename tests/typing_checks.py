@@ -79,3 +79,19 @@ def syscall_preserves_signatures() -> None:
 def resource_tracker_is_generic_over_the_plugin() -> None:
     tracker = ResourceTracker(PluginTracker[AppPlugin](), ResourceRegistry[AppPlugin]())
     assert_type(tracker.current_owner(), AppPlugin | None)
+
+
+def bind_and_callback_preserve_signatures() -> None:
+    plugins = PluginTracker[Plugin]()
+
+    def add(a: int, b: int) -> int:
+        return a + b
+
+    bound = plugins.bind(add)
+    assert_type(bound(1, 2), int)
+    bound("1", 2)  # type: ignore[arg-type]
+
+    tracker = ResourceTracker(plugins, ResourceRegistry[Plugin](), allow_orphans=True)
+    callback = tracker.callback(add)
+    assert_type(callback(1, 2), int)
+    callback("1", 2)  # type: ignore[arg-type]

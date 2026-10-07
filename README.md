@@ -71,7 +71,7 @@ Extensions are plain modules in the package. They depend on the core (and on `tr
 
 | Module | Provides |
 |---|---|
-| `pkl.tracking` | `ResourceTracker` and `Tracked`: resources that register themselves under the plugin that created them. |
+| `pkl.tracking` | `ResourceTracker`, `Tracked` (resources that register themselves under the plugin that created them) and `Callback` (a function bound to its creating plugin, as a resource). |
 | `pkl.events` | `Event`: only the owner invokes it, plugins subscribe, subscriptions die with the subscriber. Generator events run code before/after handlers. `emit()` awaits async handlers. |
 | `pkl.syscall` | `syscall`: a function that runs as the plugin that defined it, whoever calls it. Sync and async. |
 | `pkl.timing` | `Timer.timeout(...)` / `Timer.interval(...)`: cancelled on release, callbacks run as their owner. |
@@ -119,8 +119,9 @@ lifetime, the resource classes plugins use, and `disable()` / `uninstall()`.
 ## Async and threads
 
 The current plugin lives in a `ContextVar`, so concurrent `asyncio` tasks that run as different plugins never see each
-other's plugin, and tasks inherit the plugin they were created under. New threads start with an empty context: run their
-work in `contextvars.copy_context().run(...)` or under `plugins.executing(plugin)`. (`Timer` does this for you.)
+other's plugin, and tasks inherit the plugin they were created under. New threads start with an empty context: bind
+their entry point with `plugins.bind(fn)` (it captures the plugin executing now), or `self.bind(fn)` inside a resource.
+`Timer` does this for you.
 
 ## Examples
 

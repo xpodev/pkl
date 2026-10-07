@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextvars
 import threading
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 import pytest
@@ -120,6 +122,88 @@ def test_current_follows_a_copied_context() -> None:
     thread.start()
     thread.join()
     assert seen == [a]
+
+
+def test_bind_runs_as_the_plugin_that_was_executing_at_bind_time() -> None:
+    tracker = PluginTracker[Plugin]()
+    a, caller = Plugin(), Plugin()
+    with tracker.executing(a):
+        bound = tracker.bind(lambda: tracker.current)
+    with tracker.executing(caller):
+        assert bound() is a
+        assert tracker.current is caller
+    assert tracker.current is None
+
+
+def test_bind_outside_any_plugin_runs_as_the_host() -> None:
+    tracker = PluginTracker[Plugin]()
+    bound = tracker.bind(lambda: tracker.current)
+    with tracker.executing(Plugin()):
+        assert bound() is None
+
+
+def test_bind_as_binds_an_explicit_plugin() -> None:
+    tracker = PluginTracker[Plugin]()
+    a = Plugin()
+    assert tracker.bind_as(a, lambda: tracker.current)() is a
+    assert tracker.bind_as(None, lambda: tracker.current)() is None
+
+
+def test_bind_passes_arguments_and_keeps_metadata() -> None:
+    tracker = PluginTracker[Plugin]()
+
+    def add(a: int, b: int = 0) -> int:
+        """Adds."""
+        return a + b
+
+    bound = tracker.bind(add)
+    assert bound(1, b=2) == 3
+    assert bound.__name__ == "add" and bound.__doc__ == "Adds."
+
+
+def test_bind_restores_the_caller_when_the_function_raises() -> None:
+    tracker = PluginTracker[Plugin]()
+    a, caller = Plugin(), Plugin()
+
+    def boom() -> None:
+        raise RuntimeError
+
+    bound = tracker.bind_as(a, boom)
+    with tracker.executing(caller):
+        with pytest.raises(RuntimeError):
+            bound()
+        assert tracker.current is caller
+
+
+def test_bind_lets_a_plain_thread_run_as_the_plugin() -> None:
+    tracker = PluginTracker[Plugin]()
+    a = Plugin()
+    seen: list[Plugin | None] = []
+    with tracker.executing(a):
+        bound = tracker.bind(lambda: seen.append(tracker.current))
+    thread = threading.Thread(target=bound)
+    thread.start()
+    thread.join()
+    assert seen == [a]
+
+
+async def test_bound_async_functions_run_as_the_plugin_across_awaits() -> None:
+    tracker = PluginTracker[Plugin]()
+    plugins = [Plugin() for _ in range(3)]
+    seen: list[tuple[Plugin, Plugin | None]] = []
+
+    def make(plugin: Plugin, delay: float) -> Callable[[], Awaitable[None]]:
+        async def work() -> None:
+            for _ in range(3):
+                await asyncio.sleep(delay)
+                seen.append((plugin, tracker.current))
+
+        return tracker.bind_as(plugin, work)
+
+    await asyncio.gather(*(make(p, 0.001 * (i + 1))() for i, p in enumerate(plugins)))
+    assert len(seen) == 9
+    assert all(expected is actual for expected, actual in seen)
+    assert tracker.current is None
 
 
 # --- ResourceRegistry -------------------------------------------------------

@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
+import threading
+
 import pytest
 
 from pkl import NoCurrentPluginError, Plugin, PluginTracker, ResourceRegistry
 from pkl.tracking import (
+    CallbackReleasedError,
     ResourceTracker,
     Tracked,
     TrackerOverrideError,
@@ -182,14 +186,108 @@ def test_explicit_track_records_under_the_current_plugin() -> None:
         env.tracker.track(Plain())
 
 
-def test_executing_as_owner_runs_as_the_owner() -> None:
+def test_bind_runs_a_function_as_the_resources_owner() -> None:
     env, plugin = Env(), Plugin()
     with env.plugins.executing(plugin):
         probe = make_base(env)()
+    seen: list[Plugin | None] = []
+    run = probe.bind(lambda: seen.append(env.plugins.current))
+    run()
+    assert seen == [plugin]
     assert env.plugins.current is None
-    with probe.executing_as_owner():
-        assert env.plugins.current is plugin
-    assert env.plugins.current is None
+
+
+def test_bind_lets_a_plain_thread_run_as_the_owner() -> None:
+    env, plugin = Env(), Plugin()
+    with env.plugins.executing(plugin):
+        probe = make_base(env)()
+    seen: list[Plugin | None] = []
+
+    def record() -> None:
+        seen.append(env.plugins.current)
+
+    thread = threading.Thread(target=probe.bind(record))
+    thread.start()
+    thread.join()
+    assert seen == [plugin]
+
+
+# --- Callback ----------------------------------------------------------------
+
+
+def test_callback_runs_as_its_creator_and_is_tracked() -> None:
+    env, plugin, caller = Env(), Plugin(), Plugin()
+    seen: list[Plugin | None] = []
+    with env.plugins.executing(plugin):
+
+        def double(x: int) -> int:
+            seen.append(env.plugins.current)
+            return x * 2
+
+        callback = env.tracker.callback(double)
+    assert env.registry.resources(plugin) == (callback,)
+    with env.plugins.executing(caller):
+        assert callback(21) == 42
+        assert env.plugins.current is caller
+    assert seen == [plugin]
+    assert callback.owner is plugin and callback.active
+
+
+def test_released_callback_is_inert_and_runs_its_finalizer_once() -> None:
+    env, plugin = Env(), Plugin()
+    finalized: list[str] = []
+    with env.plugins.executing(plugin):
+        callback = env.tracker.callback(lambda: "ran", finalizer=lambda: finalized.append("done"))
+    assert callback() == "ran"
+    env.registry.release(plugin)
+    env.registry.release(plugin)
+    assert finalized == ["done"]
+    assert not callback.active
+    with pytest.raises(CallbackReleasedError):
+        callback()
+
+
+def test_callback_as_a_one_off_resource_without_a_class() -> None:
+    env, plugin = Env(), Plugin()
+    log: list[str] = []
+    with env.plugins.executing(plugin):
+        env.tracker.callback(print, finalizer=lambda: log.append("closed"))
+    env.registry.release(plugin)
+    assert log == ["closed"]
+
+
+def test_callback_without_a_plugin_raises_unless_orphans_are_allowed() -> None:
+    with pytest.raises(NoCurrentPluginError):
+        Env().tracker.callback(lambda: None)
+    orphan = Env(allow_orphans=True).tracker.callback(lambda: "x")
+    assert orphan.owner is None and orphan() == "x"
+
+
+async def test_async_callback_runs_as_its_creator_across_awaits() -> None:
+    env, plugin = Env(), Plugin()
+    seen: list[Plugin | None] = []
+
+    async def work() -> str:
+        seen.append(env.plugins.current)
+        await asyncio.sleep(0.001)
+        seen.append(env.plugins.current)
+        return "done"
+
+    with env.plugins.executing(plugin):
+        callback = env.tracker.callback(work)
+    assert await callback() == "done"
+    assert seen == [plugin, plugin]
+
+
+def test_callbacks_work_on_a_sealed_tracker() -> None:
+    env, plugin = Env(), Plugin()
+
+    class Sealed(Tracked[Plugin], tracker=env.tracker, allow_tracker_override=False):
+        def on_release(self) -> None: ...
+
+    with env.plugins.executing(plugin):
+        assert env.tracker.callback(lambda: 1)() == 1
+        Sealed()
 
 
 def test_release_error_still_unregisters() -> None:

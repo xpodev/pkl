@@ -41,12 +41,22 @@ zone_timer.interval(callback, 1.0)
 `allow_tracker_override=False` and it raises `TrackerOverrideError` instead; use that in an SDK that is single-host by
 design.
 
+### Callbacks
+
+For a one-off resource, or a function that must run as its creator, no class is needed:
+
+```python
+tracker.callback(on_message, finalizer=connection.close)   # tracked; runs as its creator; inert once released
+```
+
 ### Your own resources
 
 ```python
 class Socket(RuntimeResource):
     def __init__(self, address: str) -> None:
         self.connection = connect(address)       # self.owner is already available here
+        # work on threads pkl does not control: bind it to the owner
+        threading.Thread(target=self.bind(self.serve), daemon=True).start()
     def on_release(self) -> None:
         self.connection.close()
 ```

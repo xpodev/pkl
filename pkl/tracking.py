@@ -20,9 +20,9 @@ from __future__ import annotations
 
 import threading
 from abc import ABCMeta, abstractmethod
-from contextlib import AbstractContextManager
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, ClassVar, Generic, Self, TypeVar, cast
+from typing import Any, ClassVar, Generic, ParamSpec, Self, TypeVar, cast
 
 from .errors import NoCurrentPluginError, PklError
 from .plugin import Plugin
@@ -34,12 +34,16 @@ __all__ = [
     "ResourceTracker",
     "Tracked",
     "TrackedMeta",
+    "Callback",
+    "CallbackReleasedError",
     "UnboundResourceError",
     "TrackerOverrideError",
 ]
 
 P = TypeVar("P", bound=Plugin)
 R = TypeVar("R", bound=Resource)
+Params = ParamSpec("Params")
+T = TypeVar("T")
 
 
 class UnboundResourceError(PklError, TypeError):
@@ -48,6 +52,10 @@ class UnboundResourceError(PklError, TypeError):
 
 class TrackerOverrideError(PklError, TypeError):
     """Raised when a tracker override is attempted on a class that forbids it."""
+
+
+class CallbackReleasedError(PklError, RuntimeError):
+    """Raised when a released ``Callback`` is called."""
 
 
 @dataclass(frozen=True)
@@ -99,6 +107,20 @@ class ResourceTracker(Generic[P]):
         if owner is not None:
             self.registry.register(owner, resource)
         return resource
+
+    def callback(
+        self, func: Callable[Params, T], *, finalizer: Callable[[], object] | None = None
+    ) -> Callback[Params, T]:
+        """Make ``func`` a tracked callback of the plugin executing now.
+
+        The callback runs as that plugin, is recorded in this tracker's
+        registry, and stops working when released; ``finalizer`` (if any) runs
+        on release. It is the shortest way to create a one-off resource::
+
+            tracker.callback(lambda: None, finalizer=connection.close)
+        """
+        variant: Any = Callback._variant(self)
+        return cast("Callback[Params, T]", variant(func, finalizer=finalizer))
 
 
 class TrackedMeta(ABCMeta):
@@ -190,6 +212,11 @@ class Tracked(Generic[P], metaclass=TrackedMeta):
             raise TrackerOverrideError(
                 f"{cls.__qualname__} does not allow overriding its tracker"
             )
+        return cls._variant(tracker)
+
+    @classmethod
+    def _variant(cls, tracker: ResourceTracker[Any]) -> type[Self]:
+        """``with_tracker`` without the override check, for pkl's own use."""
         with _variants_lock:
             variants: dict[ResourceTracker[Any], type[Self]] | None = cls.__dict__.get(
                 "_pkl_variants"
@@ -227,12 +254,15 @@ class Tracked(Generic[P], metaclass=TrackedMeta):
         """Whether ``release()`` has been called."""
         return self._pkl_released
 
-    def executing_as_owner(self) -> AbstractContextManager[P | None]:
-        """Run the enclosed block as this resource's owner (as the host if it has none)."""
-        return cast(
-            "AbstractContextManager[P | None]",
-            self._pkl_resource_tracker.plugins.executing(self._pkl_owner),
-        )
+    def bind(self, func: Callable[Params, T]) -> Callable[Params, T]:
+        """Bind ``func`` to this resource's owner (the host if it has none).
+
+        The result runs as the owner whoever calls it, e.g. from a thread or
+        event loop that pkl does not control::
+
+            threading.Thread(target=self.bind(self.serve)).start()
+        """
+        return self._pkl_resource_tracker.plugins.bind_as(self._pkl_owner, func)
 
     def release(self) -> None:
         """Release the resource. Only the first call has an effect."""
@@ -250,3 +280,35 @@ class Tracked(Generic[P], metaclass=TrackedMeta):
     @abstractmethod
     def on_release(self) -> None:
         """Do the actual releasing. Called at most once."""
+
+
+class Callback(Tracked[Any], Generic[Params, T]):
+    """A callable bound to the plugin that created it, as a resource.
+
+    Calling it runs the function as that plugin (``async`` functions stay
+    ``async``). Once released it is inert: calling it raises
+    ``CallbackReleasedError``. An optional ``finalizer`` runs on release.
+
+    Create one with ``ResourceTracker.callback``.
+    """
+
+    def __init__(
+        self, func: Callable[Params, T], *, finalizer: Callable[[], object] | None = None
+    ) -> None:
+        self.func = func
+        self._finalizer = finalizer
+        self._bound = self.bind(func)
+
+    @property
+    def active(self) -> bool:
+        """Whether the callback can still be called."""
+        return not self.released
+
+    def __call__(self, *args: Params.args, **kwargs: Params.kwargs) -> T:
+        if self.released:
+            raise CallbackReleasedError("callback was released")
+        return self._bound(*args, **kwargs)
+
+    def on_release(self) -> None:
+        if self._finalizer is not None:
+            self._finalizer()

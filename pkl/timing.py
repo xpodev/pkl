@@ -31,6 +31,7 @@ class Timer(Tracked[Any]):
         self, callback: Callable[[], object], delay: float, *, repeat: bool = False
     ) -> None:
         self.callback = callback
+        self._run_callback = self.bind(callback)
         self.delay = delay
         self.repeat = repeat
         self._timer_lock = threading.Lock()
@@ -60,8 +61,7 @@ class Timer(Tracked[Any]):
         if self.released:
             return
         try:
-            with self.executing_as_owner():
-                self.callback()
+            self._run_callback()
         except Exception:
             _logger.exception("error in %s callback", "interval" if self.repeat else "timeout")
         if self.repeat:
