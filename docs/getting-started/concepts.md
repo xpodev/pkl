@@ -34,6 +34,9 @@ with plugins.executing(alpha):     # nests, restores on exit and on error
     plugins.require_current()      # alpha, or NoCurrentPluginError
 with plugins.executing(None):      # run as the host
     ...
+
+run = plugins.bind(func)           # captures the plugin executing *now*; `run()` then runs as it, from anywhere
+plugins.bind_as(alpha, func)       # the same for an explicit plugin
 ```
 
 The current plugin is stored in a `ContextVar`: it is per thread and per `asyncio` task. Trackers are independent;
